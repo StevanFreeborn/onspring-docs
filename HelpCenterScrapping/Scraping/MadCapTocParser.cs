@@ -10,8 +10,8 @@ namespace HelpCenterScrapping.Scraping;
 public sealed class MadCapTocParser
 {
   private sealed record ChunkTopicRef(
-    string CanonicalSourcePath,
-    string RequestPath,
+    string? CanonicalSourcePath,
+    string? RequestPath,
     string Title,
     string Bookmark);
 
@@ -81,7 +81,13 @@ public sealed class MadCapTocParser
       foreach (var prop in chunkDoc.RootElement.EnumerateObject())
       {
         var rawContentPath = prop.Name;
-        var (canonicalPath, requestPath) = NormalizeContentUrl(rawContentPath);
+        var isContentTopic = IsContentTopicPath(rawContentPath);
+        string? canonicalPath = null;
+        string? requestPath = null;
+        if (isContentTopic)
+        {
+          (canonicalPath, requestPath) = NormalizeContentUrl(rawContentPath);
+        }
 
         var obj = prop.Value;
         var ids = obj.TryGetProperty("i", out var iEl) ? iEl : default;
@@ -193,7 +199,7 @@ public sealed class MadCapTocParser
     }
 
     string? canonicalPath = null;
-    if (topicRef is not null)
+    if (topicRef?.CanonicalSourcePath is not null && topicRef.RequestPath is not null)
     {
       canonicalPath = topicRef.CanonicalSourcePath;
       var breadcrumb = string.Join(" > ", trail);
@@ -226,6 +232,14 @@ public sealed class MadCapTocParser
     }
 
     return new TocTreeNode(nodeId, title, canonicalPath, children.AsReadOnly());
+  }
+
+  private static bool IsContentTopicPath(string rawPath)
+  {
+    var trimmed = rawPath.Split('#')[0].Split('?')[0].Trim();
+    return trimmed.StartsWith("/Content/", StringComparison.OrdinalIgnoreCase) &&
+           (trimmed.EndsWith(".htm", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.EndsWith(".html", StringComparison.OrdinalIgnoreCase));
   }
 
   /// <summary>
