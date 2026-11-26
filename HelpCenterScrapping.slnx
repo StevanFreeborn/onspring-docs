@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="HelpCenterScrapping/HelpCenterScrapping.csproj" />
+  <Project Path="HelpCenterScrapping.Tests/HelpCenterScrapping.Tests.csproj" />
+</Solution>
