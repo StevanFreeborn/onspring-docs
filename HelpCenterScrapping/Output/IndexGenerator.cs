@@ -238,7 +238,11 @@ public static class IndexGenerator
       return;
     }
 
-    if (doc is not null)
+    var sameTargetAsChild = doc is not null && node.Children.Any(c =>
+      c.CanonicalSourcePath is not null &&
+      string.Equals(c.CanonicalSourcePath, doc.Route.CanonicalSourcePath, StringComparison.OrdinalIgnoreCase));
+
+    if (doc is not null && !sameTargetAsChild)
     {
       visitedIds.Add(doc.Route.Id);
       sb.Append(FormatDocBullet(doc, depth, overrideTitle: node.Title));

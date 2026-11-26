@@ -55,6 +55,8 @@ public sealed class DeterminismTests
       Assert.Equal(filesA[key], filesB[key]);
       Assert.DoesNotContain("\r\n", filesA[key]);
     }
+
+    Assert.DoesNotContain("\\u003E", filesA["manifest.json"]);
   }
 
   private static FetchedPage MakePage(MadCapTocResult toc, string canonicalPath, string html)

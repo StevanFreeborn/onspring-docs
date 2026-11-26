@@ -22,6 +22,22 @@ public sealed class HtmlToMarkdownPipelineTests
             <p>Email <a href="/cdn-cgi/l/email-protection#becdcbceced1cccafed1d0cdceccd7d0d990ddd1d3"><span class="__cf_email__" data-cfemail="becdcbceced1cccafed1d0cdceccd7d0d990ddd1d3">[email&#160;protected]</span></a> or see <a href="../Administrators/Apps/TriggersOutcomes/RESTAPI/ConfigureRESTAPIOutcome.htm#Define">Define General Settings</a>.</p>
           </div>
         </div>
+        <div class="MCDropDown MCDropDown_Closed dropDown">
+          <span class="MCDropDownHead dropDownHead">
+            <a href="#" class="MCDropDownHotSpot"><img class="MCDropDown_Image_Icon" src="../../Skins/transparent.gif" />How do I check roles?</a>
+          </span>
+          <div class="MCDropDownBody dropDownBody">
+            <p>Go to <b>Security &gt; Roles</b>.</p>
+          </div>
+        </div>
+      </div></body></html>
+      """;
+
+    const string homeHtml = """
+      <html><body><div id="mc-main-content">
+        <h5>Welcome to the Onspring Help Center</h5>
+        <h1>Don't Miss the Latest Help!</h1>
+        <p>Help Center version 37.2.0</p>
       </div></body></html>
       """;
 
@@ -51,9 +67,10 @@ public sealed class HtmlToMarkdownPipelineTests
 
     var pages = new[]
     {
-      CreatePage("/Help/Content/FAQs/AdministratorFAQs.htm", "Administrator FAQs", 0, ["FAQs > Administrator FAQs"], faqHtml),
-      CreatePage("/Help/Content/Administrators/Apps/TriggersOutcomes/RESTAPI/ConfigureRESTAPIOutcome.htm", "Configure a REST API Outcome", 1, ["Administrators > REST API"], restApiHtml),
-      CreatePage("/Help/Content/Videos/AddingUsersVideo.htm", "Video: Adding Users", 2, ["Videos > Adding Users"], videoHtml),
+      CreatePage("/Help/Content/Home.htm", "Getting Started", 0, ["Getting Started"], homeHtml),
+      CreatePage("/Help/Content/FAQs/AdministratorFAQs.htm", "Administrator FAQs", 1, ["FAQs > Administrator FAQs"], faqHtml),
+      CreatePage("/Help/Content/Administrators/Apps/TriggersOutcomes/RESTAPI/ConfigureRESTAPIOutcome.htm", "Configure a REST API Outcome", 2, ["Administrators > REST API"], restApiHtml),
+      CreatePage("/Help/Content/Videos/AddingUsersVideo.htm", "Video: Adding Users", 3, ["Videos > Adding Users"], videoHtml),
     };
 
     var converter = new MarkdownDocumentConverter();
@@ -64,11 +81,19 @@ public sealed class HtmlToMarkdownPipelineTests
       Password = "p",
     }, TestContext.Current.CancellationToken);
 
+    var homeDoc = corpus.Documents.Single(d => d.Route.Id == "home");
+    Assert.Equal("Welcome to the Onspring Help Center", homeDoc.Title);
+    Assert.Contains("# Welcome to the Onspring Help Center", homeDoc.MarkdownContent);
+    Assert.Contains("## Don't Miss the Latest Help!", homeDoc.MarkdownContent);
+
     var faqDoc = corpus.Documents.Single(d => d.Route.Id == "faqs/administrator-faqs");
     Assert.Contains("audience:\n  - Administrators", faqDoc.MarkdownContent);
     Assert.Contains("# Administrator FAQs", faqDoc.MarkdownContent);
     Assert.Contains("## Access FAQs", faqDoc.MarkdownContent);
     Assert.Contains("### How do I get support?", faqDoc.MarkdownContent);
+    Assert.Contains("### How do I check roles?", faqDoc.MarkdownContent);
+    Assert.DoesNotContain("#### How do I check roles?", faqDoc.MarkdownContent);
+    Assert.Contains("**Security > Roles**", faqDoc.MarkdownContent);
     Assert.Contains("Email support@onspring.com", faqDoc.MarkdownContent);
     Assert.Contains("[Define General Settings](../administrators/apps/triggers-outcomes/rest-api/configure-rest-api-outcome.md#define-general-settings)", faqDoc.MarkdownContent);
     Assert.DoesNotContain("transparent.gif", faqDoc.MarkdownContent);

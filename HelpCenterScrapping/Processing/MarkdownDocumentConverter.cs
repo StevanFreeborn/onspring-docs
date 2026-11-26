@@ -139,7 +139,8 @@ public sealed partial class MarkdownDocumentConverter
       .Replace("\u200B", string.Empty)
       .Replace("\uFEFF", string.Empty)
       .Replace("\r\n", "\n")
-      .Replace('\r', '\n');
+      .Replace('\r', '\n')
+      .Replace(" &gt; ", " > ", StringComparison.Ordinal);
 
     cleaned = TrailingLineSpacesRegex().Replace(cleaned, "\n");
     cleaned = ExcessNewlinesRegex().Replace(cleaned, "\n\n");

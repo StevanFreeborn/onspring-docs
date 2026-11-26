@@ -173,6 +173,7 @@ public sealed partial class HtmlPreprocessorPipeline
         {
           var newHeading = doc.CreateElement($"h{targetLevel}");
           newHeading.TextContent = headingText;
+          newHeading.SetAttribute("data-mc-dropdown-heading", "true");
           dropdown.Parent.InsertBefore(newHeading, dropdown);
         }
       }
@@ -186,6 +187,11 @@ public sealed partial class HtmlPreprocessorPipeline
       }
 
       dropdown.Remove();
+    }
+
+    foreach (var ddHeading in main.QuerySelectorAll("[data-mc-dropdown-heading]").ToList())
+    {
+      ddHeading.RemoveAttribute("data-mc-dropdown-heading");
     }
 
     // Expand .MCExpanding inline widgets
@@ -241,7 +247,9 @@ public sealed partial class HtmlPreprocessorPipeline
         break;
       }
 
-      if (HeadingTags.Contains(el.TagName) && int.TryParse(el.TagName[1..], out var lvl))
+      if (HeadingTags.Contains(el.TagName) &&
+          !el.HasAttribute("data-mc-dropdown-heading") &&
+          int.TryParse(el.TagName[1..], out var lvl))
       {
         lastLevel = lvl;
       }
@@ -280,8 +288,8 @@ public sealed partial class HtmlPreprocessorPipeline
   {
     var doc = main.Owner!;
 
-    // Home.htm uses an <h5> hero banner for the main page title
-    if (route.DocType == "home" && main.QuerySelector("h1") is null)
+    // Home.htm uses an <h5> hero banner for the main page title before an internal <h1> section
+    if (route.DocType == "home")
     {
       var heroH5 = main.QuerySelector("h5");
       if (heroH5 is not null)
