@@ -8,15 +8,16 @@ using HelpCenterScrapping.Scraping;
 namespace HelpCenterScrapping.Output;
 
 /// <summary>
-/// Generates a deterministic, machine-readable <c>manifest.json</c> catalog for RAG pipelines and validation.
+/// Generates a deterministic, machine-readable <c>manifest.json</c> catalog for RAG pipelines and validation
+/// using source-generated <see cref="System.Text.Json"/> serialization for Native AOT compatibility.
 /// </summary>
-public static class ManifestGenerator
+public static partial class ManifestGenerator
 {
-  private static readonly JsonSerializerOptions SerializerOptions = new()
+  private static readonly ManifestJsonContext JsonContext = new(new JsonSerializerOptions
   {
     WriteIndented = true,
     Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
-  };
+  });
 
   public static string GenerateManifestJson(
     MadCapTocResult tocResult,
@@ -72,11 +73,14 @@ public static class ManifestGenerator
         .ToList(),
     };
 
-    var json = JsonSerializer.Serialize(manifest, SerializerOptions);
+    var json = JsonSerializer.Serialize(manifest, JsonContext.ManifestModel);
     return json.Replace("\r\n", "\n") + "\n";
   }
 
-  private sealed class ManifestModel
+  [JsonSerializable(typeof(ManifestModel))]
+  internal partial class ManifestJsonContext : JsonSerializerContext;
+
+  internal sealed class ManifestModel
   {
     [JsonPropertyName("schema_version")]
     public int SchemaVersion { get; init; }
@@ -103,7 +107,7 @@ public static class ManifestGenerator
     public required IReadOnlyList<ManifestDocumentEntry> Documents { get; init; }
   }
 
-  private sealed class ManifestFilters
+  internal sealed class ManifestFilters
   {
     [JsonPropertyName("exclude_release_notes")]
     public bool ExcludeReleaseNotes { get; init; }
@@ -118,7 +122,7 @@ public static class ManifestGenerator
     public bool IncludeNonTocLinks { get; init; }
   }
 
-  private sealed class ManifestDocumentEntry
+  internal sealed class ManifestDocumentEntry
   {
     [JsonPropertyName("id")]
     public required string Id { get; init; }
@@ -166,7 +170,7 @@ public static class ManifestGenerator
     public required string Sha256 { get; init; }
   }
 
-  private sealed class ManifestHeadingEntry
+  internal sealed class ManifestHeadingEntry
   {
     [JsonPropertyName("level")]
     public int Level { get; init; }
