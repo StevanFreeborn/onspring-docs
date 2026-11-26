@@ -1,6 +1,6 @@
-using HelpCenterScrapping.Options;
+using OnspringDocs.Options;
 
-namespace HelpCenterScrapping.Tests;
+namespace OnspringDocs.Tests;
 
 public sealed class ScraperOptionsTests
 {

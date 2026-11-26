@@ -1,10 +1,10 @@
 using System.Collections.Concurrent;
 using System.Net;
 using AngleSharp;
-using HelpCenterScrapping.Options;
+using OnspringDocs.Options;
 using Microsoft.Extensions.Logging;
 
-namespace HelpCenterScrapping.Scraping;
+namespace OnspringDocs.Scraping;
 
 /// <summary>
 /// Downloads MadCap TOC topics and performs bounded 1-hop discovery of linked internal pages

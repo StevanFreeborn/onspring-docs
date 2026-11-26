@@ -1,8 +1,8 @@
 using System.Text;
-using HelpCenterScrapping.Processing;
-using HelpCenterScrapping.Scraping;
+using OnspringDocs.Processing;
+using OnspringDocs.Scraping;
 
-namespace HelpCenterScrapping.Output;
+namespace OnspringDocs.Output;
 
 /// <summary>
 /// Generates deterministic agent-facing navigation files: <c>AGENTS.md</c>, <c>INDEX.md</c>, and <c>llms.txt</c>.

@@ -1,6 +1,6 @@
-using HelpCenterScrapping.Scraping;
+using OnspringDocs.Scraping;
 
-namespace HelpCenterScrapping.Processing;
+namespace OnspringDocs.Processing;
 
 /// <summary>
 /// Resolved output route and classification for a Help Center page.

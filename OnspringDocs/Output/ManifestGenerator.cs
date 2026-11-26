@@ -1,11 +1,11 @@
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using HelpCenterScrapping.Options;
-using HelpCenterScrapping.Processing;
-using HelpCenterScrapping.Scraping;
+using OnspringDocs.Options;
+using OnspringDocs.Processing;
+using OnspringDocs.Scraping;
 
-namespace HelpCenterScrapping.Output;
+namespace OnspringDocs.Output;
 
 /// <summary>
 /// Generates a deterministic, machine-readable <c>manifest.json</c> catalog for RAG pipelines and validation

@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="OnspringDocs/OnspringDocs.csproj" />
+  <Project Path="OnspringDocs.Tests/OnspringDocs.Tests.csproj" />
+</Solution>

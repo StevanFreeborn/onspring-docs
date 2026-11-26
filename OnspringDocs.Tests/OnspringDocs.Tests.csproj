@@ -19,7 +19,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\HelpCenterScrapping\HelpCenterScrapping.csproj" />
+    <ProjectReference Include="..\OnspringDocs\OnspringDocs.csproj" />
   </ItemGroup>
 
   <ItemGroup>

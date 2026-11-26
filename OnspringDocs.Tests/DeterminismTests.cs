@@ -1,9 +1,9 @@
-using HelpCenterScrapping.Options;
-using HelpCenterScrapping.Output;
-using HelpCenterScrapping.Processing;
-using HelpCenterScrapping.Scraping;
+using OnspringDocs.Options;
+using OnspringDocs.Output;
+using OnspringDocs.Processing;
+using OnspringDocs.Scraping;
 
-namespace HelpCenterScrapping.Tests;
+namespace OnspringDocs.Tests;
 
 public sealed class DeterminismTests
 {

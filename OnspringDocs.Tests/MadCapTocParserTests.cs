@@ -1,6 +1,6 @@
-using HelpCenterScrapping.Scraping;
+using OnspringDocs.Scraping;
 
-namespace HelpCenterScrapping.Tests;
+namespace OnspringDocs.Tests;
 
 public sealed class MadCapTocParserTests
 {

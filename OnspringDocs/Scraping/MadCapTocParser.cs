@@ -2,7 +2,7 @@ using System.Text;
 using System.Text.Json;
 using System.Xml.Linq;
 
-namespace HelpCenterScrapping.Scraping;
+namespace OnspringDocs.Scraping;
 
 /// <summary>
 /// Parses MadCap Flare HelpSystem.xml and RequireJS TOC chunk files into a deterministic hierarchy.

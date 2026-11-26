@@ -1,7 +1,7 @@
 using System.Text;
 using System.Text.RegularExpressions;
 
-namespace HelpCenterScrapping.Processing;
+namespace OnspringDocs.Processing;
 
 /// <summary>
 /// Generates deterministic GitHub-Flavored Markdown heading slugs and tracks per-document uniqueness.

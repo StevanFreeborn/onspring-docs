@@ -1,6 +1,6 @@
 using System.Text;
 
-namespace HelpCenterScrapping.Output;
+namespace OnspringDocs.Output;
 
 /// <summary>
 /// Writes the generated documentation tree into a staging directory using UTF-8 (no BOM) and LF line endings,

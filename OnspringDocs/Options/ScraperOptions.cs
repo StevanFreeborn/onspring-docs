@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Configuration;
 
-namespace HelpCenterScrapping.Options;
+namespace OnspringDocs.Options;
 
 /// <summary>
 /// Immutable configuration options controlling scraping, filtering, and output generation.

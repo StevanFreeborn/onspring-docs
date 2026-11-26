@@ -1,7 +1,7 @@
 using System.Text;
 using AngleSharp.Dom;
 
-namespace HelpCenterScrapping.Processing;
+namespace OnspringDocs.Processing;
 
 /// <summary>
 /// Decodes Cloudflare email-obfuscation hex payloads (<c>data-cfemail</c> and <c>/cdn-cgi/l/email-protection#...</c>).

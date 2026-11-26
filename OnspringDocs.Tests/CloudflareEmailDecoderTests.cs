@@ -1,7 +1,7 @@
 using AngleSharp;
-using HelpCenterScrapping.Processing;
+using OnspringDocs.Processing;
 
-namespace HelpCenterScrapping.Tests;
+namespace OnspringDocs.Tests;
 
 public sealed class CloudflareEmailDecoderTests
 {

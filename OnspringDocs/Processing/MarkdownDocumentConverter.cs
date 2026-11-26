@@ -1,11 +1,11 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
-using HelpCenterScrapping.Options;
-using HelpCenterScrapping.Scraping;
+using OnspringDocs.Options;
+using OnspringDocs.Scraping;
 using ReverseMarkdown;
 
-namespace HelpCenterScrapping.Processing;
+namespace OnspringDocs.Processing;
 
 /// <summary>
 /// Converts preprocessed Help Center HTML into deterministic GitHub-Flavored Markdown with YAML frontmatter.

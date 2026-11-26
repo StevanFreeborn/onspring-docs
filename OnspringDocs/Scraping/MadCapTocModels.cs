@@ -1,4 +1,4 @@
-namespace HelpCenterScrapping.Scraping;
+namespace OnspringDocs.Scraping;
 
 /// <summary>
 /// Metadata parsed from MadCap Flare's /Help/Data/HelpSystem.xml.

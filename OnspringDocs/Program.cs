@@ -1,8 +1,8 @@
-﻿using System.Diagnostics;
-using HelpCenterScrapping.Options;
-using HelpCenterScrapping.Output;
-using HelpCenterScrapping.Processing;
-using HelpCenterScrapping.Scraping;
+using System.Diagnostics;
+using OnspringDocs.Options;
+using OnspringDocs.Output;
+using OnspringDocs.Processing;
+using OnspringDocs.Scraping;
 using Microsoft.Extensions.Logging;
 
 var parseResult = ScraperOptions.Parse(args);

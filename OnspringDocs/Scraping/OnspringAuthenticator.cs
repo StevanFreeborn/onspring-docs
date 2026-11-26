@@ -1,9 +1,9 @@
 using System.Net;
 using AngleSharp;
-using HelpCenterScrapping.Options;
+using OnspringDocs.Options;
 using Microsoft.Extensions.Logging;
 
-namespace HelpCenterScrapping.Scraping;
+namespace OnspringDocs.Scraping;
 
 /// <summary>
 /// Authenticates against an Onspring instance using pure HTTP form login

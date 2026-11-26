@@ -1,8 +1,8 @@
 using System.Text.RegularExpressions;
-using HelpCenterScrapping.Options;
-using HelpCenterScrapping.Scraping;
+using OnspringDocs.Options;
+using OnspringDocs.Scraping;
 
-namespace HelpCenterScrapping.Processing;
+namespace OnspringDocs.Processing;
 
 /// <summary>
 /// Maps canonical Help Center source URLs to normalized kebab-case Markdown routes, sections,

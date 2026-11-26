@@ -2,9 +2,9 @@ using System.Text.RegularExpressions;
 using AngleSharp;
 using AngleSharp.Dom;
 using AngleSharp.Html.Dom;
-using HelpCenterScrapping.Scraping;
+using OnspringDocs.Scraping;
 
-namespace HelpCenterScrapping.Processing;
+namespace OnspringDocs.Processing;
 
 /// <summary>
 /// Two-pass AngleSharp HTML preprocessing pipeline tailored for MadCap Flare Help Center content.
