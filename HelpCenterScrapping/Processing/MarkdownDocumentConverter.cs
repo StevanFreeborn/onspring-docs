@@ -28,7 +28,7 @@ public sealed partial class MarkdownDocumentConverter
   {
     var config = new Config
     {
-      Flavor = Config.MarkdownFlavor.GitHub,
+      GithubFlavored = true,
       Formatting =
       {
         RemoveComments = true,
