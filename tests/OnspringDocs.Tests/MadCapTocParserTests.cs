@@ -1,3 +1,4 @@
+using System.Text.Json;
 using OnspringDocs.Scraping;
 
 namespace OnspringDocs.Tests;
@@ -28,16 +29,27 @@ public sealed class MadCapTocParserTests
       """;
 
     var json = MadCapTocParser.JsObjectLiteralToJson(payload);
-    using var doc = System.Text.Json.JsonDocument.Parse(json);
+    using var doc = JsonDocument.Parse(json);
 
-    Assert.Equal("What's \"New\" & Info", doc.RootElement.GetProperty("/Content/Home.htm").GetProperty("t")[0].GetString());
-    Assert.Equal(0, doc.RootElement.GetProperty("tree").GetProperty("n")[0].GetProperty("i").GetInt32());
+    Assert.Equal(
+      "What's \"New\" & Info",
+      doc.RootElement.GetProperty("/Content/Home.htm").GetProperty("t")[0].GetString()
+    );
+    Assert.Equal(
+      0,
+      doc.RootElement.GetProperty("tree").GetProperty("n")[0].GetProperty("i").GetInt32()
+    );
   }
 
   [Fact]
   public void ParseFromPayloads_ReconstructsOrderedTreeAndDeduplicatesEncodedUrls()
   {
-    var helpSystem = new HelpSystemMetadata("Data/Tocs/OnspringTOC.js", "Content/Home.htm", "22.0", "9/28/2026");
+    var helpSystem = new HelpSystemMetadata(
+      "Data/Tocs/OnspringTOC.js",
+      "Content/Home.htm",
+      "22.0",
+      "9/28/2026"
+    );
 
     const string tocJs = """
       define({numchunks:2,prefix:'OnspringTOC_Chunk',tree:{n:[{i:0,c:0},{i:1,c:0,n:[{i:2,c:1}]},{i:3,c:1},{i:4,c:1,n:[{i:5,c:1}]}]}});
@@ -54,8 +66,13 @@ public sealed class MadCapTocParserTests
     var result = MadCapTocParser.ParseFromPayloads(helpSystem, tocJs, [chunk0, chunk1]);
 
     Assert.Equal(5, result.EntriesByPath.Count);
-    Assert.True(result.EntriesByPath.ContainsKey("/Help/Content/ReleaseNotes/5.0_New Features.htm"));
-    Assert.DoesNotContain(result.EntriesByPath.Keys, k => k.Contains("___"));
+    Assert.True(
+      result.EntriesByPath.ContainsKey("/Help/Content/ReleaseNotes/5.0_New Features.htm")
+    );
+    Assert.DoesNotContain(
+      result.EntriesByPath.Keys,
+      k => k.Contains("___", StringComparison.Ordinal)
+    );
 
     var portalFaq = result.EntriesByPath["/Help/Content/FAQs/PortalFAQs.htm"];
     Assert.Equal(2, portalFaq.TocOrder);

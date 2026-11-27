@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using AngleSharp.Dom;
 
@@ -6,7 +7,7 @@ namespace OnspringDocs.Processing;
 /// <summary>
 /// Decodes Cloudflare email-obfuscation hex payloads (<c>data-cfemail</c> and <c>/cdn-cgi/l/email-protection#...</c>).
 /// </summary>
-public static class CloudflareEmailDecoder
+internal static class CloudflareEmailDecoder
 {
   private const string EmailProtectionPrefix = "/cdn-cgi/l/email-protection";
 
@@ -22,18 +23,26 @@ public static class CloudflareEmailDecoder
     }
 
     var trimmed = hex.Trim();
-    if (trimmed.Length < 4 || trimmed.Length % 2 != 0)
+    if (trimmed.Length is < 4 || trimmed.Length % 2 is not 0)
     {
       return string.Empty;
     }
 
     try
     {
-      var key = Convert.ToByte(trimmed[..2], 16);
+      var key = byte.Parse(
+        trimmed.AsSpan(0, 2),
+        NumberStyles.HexNumber,
+        CultureInfo.InvariantCulture
+      );
       var bytes = new byte[(trimmed.Length - 2) / 2];
       for (var i = 2; i < trimmed.Length; i += 2)
       {
-        var encodedByte = Convert.ToByte(trimmed.Substring(i, 2), 16);
+        var encodedByte = byte.Parse(
+          trimmed.AsSpan(i, 2),
+          NumberStyles.HexNumber,
+          CultureInfo.InvariantCulture
+        );
         bytes[(i - 2) / 2] = (byte)(encodedByte ^ key);
       }
 
@@ -75,13 +84,13 @@ public static class CloudflareEmailDecoder
     {
       var href = anchor.GetAttribute("href");
       if (string.IsNullOrWhiteSpace(href) ||
-          !href.Contains(EmailProtectionPrefix, StringComparison.OrdinalIgnoreCase))
+          href.Contains(EmailProtectionPrefix, StringComparison.OrdinalIgnoreCase) is false)
       {
         continue;
       }
 
-      var hashIndex = href.IndexOf('#');
-      if (hashIndex < 0 || hashIndex + 1 >= href.Length)
+      var hashIndex = href.IndexOf('#', StringComparison.Ordinal);
+      if (hashIndex is < 0 || hashIndex + 1 >= href.Length)
       {
         continue;
       }
@@ -97,8 +106,8 @@ public static class CloudflareEmailDecoder
 
       var currentText = anchor.TextContent.Replace('\u00A0', ' ').Trim();
       if (string.IsNullOrEmpty(currentText) ||
-          currentText.Contains("email", StringComparison.OrdinalIgnoreCase) &&
-          currentText.Contains("protected", StringComparison.OrdinalIgnoreCase))
+          (currentText.Contains("email", StringComparison.OrdinalIgnoreCase) &&
+           currentText.Contains("protected", StringComparison.OrdinalIgnoreCase)))
       {
         anchor.TextContent = email;
       }

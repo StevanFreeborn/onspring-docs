@@ -3,53 +3,59 @@ namespace OnspringDocs.Scraping;
 /// <summary>
 /// Metadata parsed from MadCap Flare's /Help/Data/HelpSystem.xml.
 /// </summary>
-public sealed record HelpSystemMetadata(
+internal sealed record HelpSystemMetadata(
   string TocRelativePath,
   string DefaultUrl,
   string BuildVersion,
-  string BuildTime);
+  string BuildTime
+);
 
 /// <summary>
 /// Represents a topic discovered in the MadCap Flare TOC tree (or via 1-hop link discovery).
 /// </summary>
-public sealed record TocEntry(
+internal sealed record TocEntry(
   string CanonicalSourcePath,
   string RequestPath,
   string PrimaryTitle,
   int TocOrder,
   IReadOnlyList<string> TocPaths,
-  bool InToc);
+  bool InToc
+);
 
 /// <summary>
 /// Represents a node in the hierarchical MadCap Flare TOC tree.
 /// </summary>
-public sealed record TocTreeNode(
+internal sealed record TocTreeNode(
   int NodeId,
   string Title,
   string? CanonicalSourcePath,
-  IReadOnlyList<TocTreeNode> Children);
+  IReadOnlyList<TocTreeNode> Children
+);
 
 /// <summary>
 /// Complete parsed MadCap Flare HelpSystem and TOC tree.
 /// </summary>
-public sealed record MadCapTocResult(
+internal sealed record MadCapTocResult(
   HelpSystemMetadata HelpSystem,
   IReadOnlyList<TocTreeNode> RootNodes,
-  IReadOnlyDictionary<string, TocEntry> EntriesByPath);
+  IReadOnlyDictionary<string, TocEntry> EntriesByPath
+);
 
 /// <summary>
 /// Raw HTML page downloaded from the Help Center.
 /// </summary>
-public sealed record FetchedPage(
+internal sealed record FetchedPage(
   string CanonicalSourcePath,
   string RequestPath,
   string Html,
-  TocEntry TocInfo);
+  TocEntry TocInfo
+);
 
 /// <summary>
 /// Result of fetching all TOC pages and optional 1-hop discovered internal links.
 /// </summary>
-public sealed record FetchResult(
+internal sealed record FetchResult(
   MadCapTocResult Toc,
   IReadOnlyList<FetchedPage> Pages,
-  IReadOnlyList<string> DiscoveredNonTocUrls);
+  IReadOnlyList<string> DiscoveredNonTocUrls
+);

@@ -7,12 +7,17 @@ public sealed class ScraperOptionsTests
   [Fact]
   public void Parse_UsesExplicitConfigFileOverridingDefaults()
   {
-    var tempDir = Path.Combine(Path.GetTempPath(), $"onspring-docs-opt-{Guid.NewGuid():N}");
+    var tempDir = Path.Combine(
+      Path.GetTempPath(),
+      $"onspring-docs-opt-{Guid.NewGuid():N}"
+    );
     Directory.CreateDirectory(tempDir);
     try
     {
       var cfgPath = Path.Combine(tempDir, "custom.json");
-      File.WriteAllText(cfgPath, """
+      File.WriteAllText(
+        cfgPath,
+        """
         {
           "Onspring": {
             "BaseUrl": "https://custom.onspring.com/",
@@ -20,9 +25,12 @@ public sealed class ScraperOptionsTests
             "Password": "secret"
           }
         }
-        """);
+        """
+      );
 
-      var result = ScraperOptions.Parse(["--config", cfgPath, "--output", "out-dir", "--recent-releases", "3"]);
+      var result = ScraperOptions.Parse(
+        ["--config", cfgPath, "--output", "out-dir", "--recent-releases", "3"]
+      );
 
       Assert.True(result.IsSuccess);
       Assert.NotNull(result.Options);
@@ -42,10 +50,13 @@ public sealed class ScraperOptionsTests
   [Fact]
   public void Parse_FailsWhenExplicitConfigMissing()
   {
-    var missingPath = Path.Combine(Path.GetTempPath(), $"missing-{Guid.NewGuid():N}.json");
+    var missingPath = Path.Combine(
+      Path.GetTempPath(),
+      $"missing-{Guid.NewGuid():N}.json"
+    );
     var result = ScraperOptions.Parse(["--config", missingPath]);
 
     Assert.False(result.IsSuccess);
-    Assert.Contains("Config file not found", result.ErrorMessage);
+    Assert.Contains("Config file not found", result.ErrorMessage, StringComparison.Ordinal);
   }
 }

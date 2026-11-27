@@ -1,7 +1,8 @@
+using System.Collections.ObjectModel;
+using System.Globalization;
 using System.Text.RegularExpressions;
 using AngleSharp;
 using AngleSharp.Dom;
-using AngleSharp.Html.Dom;
 using OnspringDocs.Scraping;
 
 namespace OnspringDocs.Processing;
@@ -9,7 +10,7 @@ namespace OnspringDocs.Processing;
 /// <summary>
 /// Two-pass AngleSharp HTML preprocessing pipeline tailored for MadCap Flare Help Center content.
 /// </summary>
-public sealed partial class HtmlPreprocessorPipeline
+internal static partial class HtmlPreprocessorPipeline
 {
   [GeneratedRegex(@"\s+")]
   private static partial Regex MultiSpaceRegex();
@@ -28,27 +29,39 @@ public sealed partial class HtmlPreprocessorPipeline
 
   private static readonly HashSet<string> HeadingTags = new(StringComparer.OrdinalIgnoreCase)
   {
-    "h1", "h2", "h3", "h4", "h5", "h6",
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
   };
 
   /// <summary>
   /// Pass 1: Parses all included documents in parallel to map heading slugs and legacy MadCap named bookmarks.
   /// </summary>
-  public async Task<IReadOnlyDictionary<string, DocumentAnchorIndex>> BuildCorpusAnchorIndexAsync(
+  public static async Task<IReadOnlyDictionary<string, DocumentAnchorIndex>> BuildCorpusAnchorIndexAsync(
     IReadOnlyList<(DocumentRoute Route, FetchedPage Page)> items,
     int maxConcurrency,
-    CancellationToken cancellationToken = default)
+    CancellationToken cancellationToken = default
+  )
   {
     var results = new DocumentAnchorIndex[items.Count];
     var indexedItems = items.Select((item, idx) => (item.Route, item.Page, Index: idx));
 
     await Parallel.ForEachAsync(
       indexedItems,
-      new ParallelOptions { MaxDegreeOfParallelism = maxConcurrency, CancellationToken = cancellationToken },
+      new ParallelOptions
+      {
+        MaxDegreeOfParallelism = maxConcurrency,
+        CancellationToken = cancellationToken,
+      },
       async (entry, ct) =>
       {
-        var context = BrowsingContext.New(Configuration.Default);
-        var doc = await context.OpenAsync(req => req.Content(entry.Page.Html), ct);
+        using var context = BrowsingContext.New(Configuration.Default);
+        using var doc = await context
+          .OpenAsync(req => req.Content(entry.Page.Html), ct)
+          .ConfigureAwait(false);
         var main = doc.QuerySelector("#mc-main-content") ?? doc.Body;
 
         var validSlugs = new HashSet<string>(StringComparer.Ordinal);
@@ -59,7 +72,11 @@ public sealed partial class HtmlPreprocessorPipeline
           StripCommentsAndBoilerplate(main);
           CloudflareEmailDecoder.DecodeEmailsInElement(main);
           ExpandInteractiveWidgets(main);
-          NormalizeDocumentTitleHeadings(main, entry.Route, fallbackTitle: entry.Route.TocInfo.PrimaryTitle);
+          NormalizeDocumentTitleHeadings(
+            main,
+            entry.Route,
+            fallbackTitle: entry.Route.TocInfo.PrimaryTitle
+          );
 
           var headings = ExtractHeadingInfos(main);
           foreach (var h in headings)
@@ -70,28 +87,40 @@ public sealed partial class HtmlPreprocessorPipeline
           MapBookmarksToHeadingSlugs(main, bookmarkToSlug);
         }
 
-        results[entry.Index] = new DocumentAnchorIndex(entry.Route, validSlugs, bookmarkToSlug);
-      });
+        results[entry.Index] = new DocumentAnchorIndex(
+          entry.Route,
+          validSlugs,
+          bookmarkToSlug
+        );
+      }
+    ).ConfigureAwait(false);
 
-    return results.ToDictionary(x => x.Route.CanonicalSourcePath, x => x, StringComparer.OrdinalIgnoreCase);
+    return results.ToDictionary(
+      x => x.Route.CanonicalSourcePath,
+      x => x,
+      StringComparer.OrdinalIgnoreCase
+    );
   }
 
   /// <summary>
   /// Preprocesses a single document's DOM into clean semantic HTML ready for GFM conversion.
   /// </summary>
-  public async Task<PreprocessedHtmlResult> PreprocessDocumentAsync(
+  public static async Task<PreprocessedHtmlResult> PreprocessDocumentAsync(
     DocumentRoute route,
     string rawHtml,
     IReadOnlyDictionary<string, DocumentAnchorIndex> corpusIndex,
-    CancellationToken cancellationToken = default)
+    CancellationToken cancellationToken = default
+  )
   {
-    var context = BrowsingContext.New(Configuration.Default);
-    var doc = await context.OpenAsync(req => req.Content(rawHtml), cancellationToken);
+    using var context = BrowsingContext.New(Configuration.Default);
+    using var doc = await context
+      .OpenAsync(req => req.Content(rawHtml), cancellationToken)
+      .ConfigureAwait(false);
     var main = doc.QuerySelector("#mc-main-content") ?? doc.Body
       ?? throw new InvalidDataException($"Document {route.CanonicalSourcePath} has no body.");
 
     string? helpCenterVersion = null;
-    if (route.DocType == "home")
+    if (route.DocType is "home")
     {
       var verMatch = HelpCenterVersionRegex().Match(NormalizeWhitespace(main.TextContent));
       if (verMatch.Success)
@@ -105,7 +134,11 @@ public sealed partial class HtmlPreprocessorPipeline
     ExpandInteractiveWidgets(main);
 
     var audience = ExtractAndRemoveAudience(main);
-    var title = NormalizeDocumentTitleHeadings(main, route, fallbackTitle: route.TocInfo.PrimaryTitle);
+    var title = NormalizeDocumentTitleHeadings(
+      main,
+      route,
+      fallbackTitle: route.TocInfo.PrimaryTitle
+    );
 
     ConvertMonospaceSpansToCode(main);
     ConvertCalloutsToBlockquotes(main);
@@ -127,7 +160,8 @@ public sealed partial class HtmlPreprocessorPipeline
       LinksTo: linksTo,
       CleanHtml: main.InnerHtml,
       HelpCenterVersion: helpCenterVersion,
-      DroppedInternalLinksCount: droppedInternalLinks);
+      DroppedInternalLinksCount: droppedInternalLinks
+    );
   }
 
   private static void StripCommentsAndBoilerplate(IElement main)
@@ -137,7 +171,11 @@ public sealed partial class HtmlPreprocessorPipeline
       node.RemoveFromParent();
     }
 
-    foreach (var el in main.QuerySelectorAll("script, style, noscript, .MCBreadcrumbsBox_0, .breadcrumbs, img.MCDropDown_Image_Icon, a[name^='kanchor']").ToList())
+    foreach (var el in main
+      .QuerySelectorAll(
+        "script, style, noscript, .MCBreadcrumbsBox_0, .breadcrumbs, img.MCDropDown_Image_Icon, a[name^='kanchor']"
+      )
+      .ToList())
     {
       el.Remove();
     }
@@ -169,7 +207,7 @@ public sealed partial class HtmlPreprocessorPipeline
         }
 
         var headingText = NormalizeWhitespace(headEl.TextContent);
-        if (!string.IsNullOrEmpty(headingText))
+        if (string.IsNullOrEmpty(headingText) is false)
         {
           var newHeading = doc.CreateElement($"h{targetLevel}");
           newHeading.TextContent = headingText;
@@ -227,6 +265,7 @@ public sealed partial class HtmlPreprocessorPipeline
       {
         img.Remove();
       }
+
       UnwrapElement(toggler);
     }
   }
@@ -248,8 +287,13 @@ public sealed partial class HtmlPreprocessorPipeline
       }
 
       if (HeadingTags.Contains(el.TagName) &&
-          !el.HasAttribute("data-mc-dropdown-heading") &&
-          int.TryParse(el.TagName[1..], out var lvl))
+          el.HasAttribute("data-mc-dropdown-heading") is false &&
+          int.TryParse(
+            el.TagName.AsSpan(1),
+            NumberStyles.Integer,
+            CultureInfo.InvariantCulture,
+            out var lvl
+          ))
       {
         lastLevel = lvl;
       }
@@ -258,7 +302,7 @@ public sealed partial class HtmlPreprocessorPipeline
     return lastLevel;
   }
 
-  private static IReadOnlyList<string> ExtractAndRemoveAudience(IElement main)
+  private static ReadOnlyCollection<string> ExtractAndRemoveAudience(IElement main)
   {
     var audiences = new List<string>();
     var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -267,13 +311,13 @@ public sealed partial class HtmlPreprocessorPipeline
     {
       var text = NormalizeWhitespace(p.TextContent);
       var match = TopicAudienceRegex().Match(text);
-      if (!match.Success)
+      if (match.Success is false)
       {
         continue;
       }
 
       var rawAudience = NormalizeWhitespace(match.Groups[1].Value);
-      if (!string.IsNullOrEmpty(rawAudience) && seen.Add(rawAudience))
+      if (string.IsNullOrEmpty(rawAudience) is false && seen.Add(rawAudience))
       {
         audiences.Add(rawAudience);
       }
@@ -284,18 +328,22 @@ public sealed partial class HtmlPreprocessorPipeline
     return audiences.AsReadOnly();
   }
 
-  private static string NormalizeDocumentTitleHeadings(IElement main, DocumentRoute route, string fallbackTitle)
+  private static string NormalizeDocumentTitleHeadings(
+    IElement main,
+    DocumentRoute route,
+    string fallbackTitle
+  )
   {
     var doc = main.Owner!;
 
     // Home.htm uses an <h5> hero banner for the main page title before an internal <h1> section
-    if (route.DocType == "home")
+    if (route.DocType is "home")
     {
       var heroH5 = main.QuerySelector("h5");
       if (heroH5 is not null)
       {
         var heroText = NormalizeWhitespace(heroH5.TextContent);
-        if (!string.IsNullOrEmpty(heroText))
+        if (string.IsNullOrEmpty(heroText) is false)
         {
           var h1 = doc.CreateElement("h1");
           h1.TextContent = heroText;
@@ -306,7 +354,7 @@ public sealed partial class HtmlPreprocessorPipeline
 
     var h1List = main.QuerySelectorAll("h1").ToList();
     string title;
-    if (h1List.Count > 0)
+    if (h1List.Count is > 0)
     {
       title = NormalizeWhitespace(h1List[0].TextContent);
       if (string.IsNullOrWhiteSpace(title))
@@ -323,6 +371,7 @@ public sealed partial class HtmlPreprocessorPipeline
         {
           h2.AppendChild(child);
         }
+
         h1List[i].Replace(h2);
       }
     }
@@ -348,7 +397,7 @@ public sealed partial class HtmlPreprocessorPipeline
     foreach (var span in main.QuerySelectorAll("span[style]").ToList())
     {
       var style = span.GetAttribute("style");
-      if (string.IsNullOrEmpty(style) || !MonospaceStyleRegex().IsMatch(style))
+      if (string.IsNullOrEmpty(style) || MonospaceStyleRegex().IsMatch(style) is false)
       {
         continue;
       }
@@ -376,7 +425,7 @@ public sealed partial class HtmlPreprocessorPipeline
 
       var text = NormalizeWhitespace(p.TextContent);
       var match = CalloutPrefixRegex().Match(text);
-      if (!match.Success)
+      if (match.Success is false)
       {
         continue;
       }
@@ -416,7 +465,7 @@ public sealed partial class HtmlPreprocessorPipeline
     foreach (var iframe in main.QuerySelectorAll("iframe").ToList())
     {
       var src = iframe.GetAttribute("src")?.Trim();
-      if (docType == "video" && !string.IsNullOrWhiteSpace(src))
+      if (docType is "video" && string.IsNullOrWhiteSpace(src) is false)
       {
         var p = doc.CreateElement("p");
         var a = doc.CreateElement("a");
@@ -432,7 +481,10 @@ public sealed partial class HtmlPreprocessorPipeline
     }
   }
 
-  private static void MapBookmarksToHeadingSlugs(IElement main, Dictionary<string, string> bookmarkToSlug)
+  private static void MapBookmarksToHeadingSlugs(
+    IElement main,
+    Dictionary<string, string> bookmarkToSlug
+  )
   {
     var tracker = new AnchorSlugTracker();
     var allElements = main.QuerySelectorAll("*").ToList();
@@ -464,7 +516,7 @@ public sealed partial class HtmlPreprocessorPipeline
         ? el.GetAttribute("name")?.Trim()
         : null;
 
-      foreach (var anchorKey in new[] { id, name })
+      foreach (var anchorKey in (ReadOnlySpan<string?>)[id, name])
       {
         if (string.IsNullOrWhiteSpace(anchorKey) ||
             anchorKey.StartsWith("kanchor", StringComparison.OrdinalIgnoreCase) ||
@@ -473,8 +525,14 @@ public sealed partial class HtmlPreprocessorPipeline
           continue;
         }
 
-        var targetSlug = ResolveTargetSlugForElement(el, i, allElements, headingSlugs, lastHeadingSlug);
-        if (!string.IsNullOrEmpty(targetSlug))
+        var targetSlug = ResolveTargetSlugForElement(
+          el,
+          i,
+          allElements,
+          headingSlugs,
+          lastHeadingSlug
+        );
+        if (string.IsNullOrEmpty(targetSlug) is false)
         {
           bookmarkToSlug.TryAdd(anchorKey, targetSlug);
         }
@@ -487,10 +545,12 @@ public sealed partial class HtmlPreprocessorPipeline
     int index,
     List<IElement> allElements,
     Dictionary<IElement, string> headingSlugs,
-    string? lastHeadingSlug)
+    string? lastHeadingSlug
+  )
   {
     var enclosingHeading = el.Closest("h1, h2, h3, h4, h5, h6");
-    if (enclosingHeading is not null && headingSlugs.TryGetValue(enclosingHeading, out var enclosedSlug))
+    if (enclosingHeading is not null &&
+        headingSlugs.TryGetValue(enclosingHeading, out var enclosedSlug))
     {
       return enclosedSlug;
     }
@@ -531,14 +591,16 @@ public sealed partial class HtmlPreprocessorPipeline
   private static (IReadOnlyList<string> LinksTo, int DroppedCount) RewriteLinks(
     IElement main,
     DocumentRoute currentRoute,
-    IReadOnlyDictionary<string, DocumentAnchorIndex> corpusIndex)
+    IReadOnlyDictionary<string, DocumentAnchorIndex> corpusIndex
+  )
   {
     var linksTo = new SortedSet<string>(StringComparer.Ordinal);
     var droppedCount = 0;
 
     var baseHostUri = new Uri("https://onspring.local");
     var currentPageUri = new Uri(baseHostUri, currentRoute.TocInfo.RequestPath);
-    var currentDir = Path.GetDirectoryName(currentRoute.RelativeMarkdownPath)?.Replace('\\', '/') ?? string.Empty;
+    var currentDir = Path.GetDirectoryName(currentRoute.RelativeMarkdownPath)?
+      .Replace('\\', '/') ?? string.Empty;
 
     corpusIndex.TryGetValue(currentRoute.CanonicalSourcePath, out var currentAnchorIndex);
 
@@ -569,6 +631,7 @@ public sealed partial class HtmlPreprocessorPipeline
         {
           UnwrapElement(anchor);
         }
+
         continue;
       }
 
@@ -578,14 +641,18 @@ public sealed partial class HtmlPreprocessorPipeline
         continue;
       }
 
-      if (!Uri.TryCreate(currentPageUri, rawHref, out var resolvedUri))
+      if (Uri.TryCreate(currentPageUri, rawHref, out var resolvedUri) is false)
       {
         UnwrapElement(anchor);
         continue;
       }
 
       // External link
-      if (!string.Equals(resolvedUri.Host, baseHostUri.Host, StringComparison.OrdinalIgnoreCase))
+      if (string.Equals(
+            resolvedUri.Host,
+            baseHostUri.Host,
+            StringComparison.OrdinalIgnoreCase
+          ) is false)
       {
         anchor.SetAttribute("href", resolvedUri.AbsoluteUri);
         continue;
@@ -600,20 +667,30 @@ public sealed partial class HtmlPreprocessorPipeline
         var (targetCanonical, _) = MadCapTocParser.NormalizeContentUrl(targetPath);
         if (corpusIndex.TryGetValue(targetCanonical, out var targetIndex))
         {
-          var relativeMdPath = ComputePosixRelativePath(currentDir, targetIndex.Route.RelativeMarkdownPath);
+          var relativeMdPath = ComputePosixRelativePath(
+            currentDir,
+            targetIndex.Route.RelativeMarkdownPath
+          );
           var rawFragment = resolvedUri.Fragment.TrimStart('#');
-          if (!string.IsNullOrEmpty(rawFragment))
+          if (string.IsNullOrEmpty(rawFragment) is false)
           {
             var decodedFrag = Uri.UnescapeDataString(rawFragment);
             var resolvedFrag = ResolveFragmentSlug(decodedFrag, targetIndex);
-            anchor.SetAttribute("href", resolvedFrag is not null ? $"{relativeMdPath}#{resolvedFrag}" : relativeMdPath);
+            anchor.SetAttribute(
+              "href",
+              resolvedFrag is not null ? $"{relativeMdPath}#{resolvedFrag}" : relativeMdPath
+            );
           }
           else
           {
             anchor.SetAttribute("href", relativeMdPath);
           }
 
-          if (!string.Equals(targetIndex.Route.Id, currentRoute.Id, StringComparison.Ordinal))
+          if (string.Equals(
+                targetIndex.Route.Id,
+                currentRoute.Id,
+                StringComparison.Ordinal
+              ) is false)
           {
             linksTo.Add(targetIndex.Route.Id);
           }
@@ -635,7 +712,10 @@ public sealed partial class HtmlPreprocessorPipeline
     return (linksTo.ToList(), droppedCount);
   }
 
-  private static string? ResolveFragmentSlug(string fragment, DocumentAnchorIndex? targetIndex)
+  private static string? ResolveFragmentSlug(
+    string fragment,
+    DocumentAnchorIndex? targetIndex
+  )
   {
     if (string.IsNullOrWhiteSpace(fragment) || targetIndex is null)
     {
@@ -651,7 +731,10 @@ public sealed partial class HtmlPreprocessorPipeline
     return targetIndex.ValidHeadingSlugs.Contains(candidate) ? candidate : null;
   }
 
-  internal static string ComputePosixRelativePath(string fromDirPosix, string targetFilePosix)
+  internal static string ComputePosixRelativePath(
+    string fromDirPosix,
+    string targetFilePosix
+  )
   {
     var fromParts = string.IsNullOrEmpty(fromDirPosix)
       ? []
@@ -678,14 +761,15 @@ public sealed partial class HtmlPreprocessorPipeline
       segments.Add(toParts[i]);
     }
 
-    return string.Join("/", segments);
+    return string.Join('/', segments);
   }
 
   private static void RemoveEmptyAnchorTags(IElement main)
   {
     foreach (var anchor in main.QuerySelectorAll("a").ToList())
     {
-      if (string.IsNullOrWhiteSpace(NormalizeWhitespace(anchor.TextContent)) && anchor.ChildElementCount == 0)
+      if (string.IsNullOrWhiteSpace(NormalizeWhitespace(anchor.TextContent)) &&
+          anchor.ChildElementCount is 0)
       {
         anchor.Remove();
       }
@@ -700,7 +784,8 @@ public sealed partial class HtmlPreprocessorPipeline
       changed = false;
       foreach (var el in main.QuerySelectorAll("p, div, span, b, strong, em, i").ToList())
       {
-        if (el.ChildElementCount == 0 && string.IsNullOrWhiteSpace(NormalizeWhitespace(el.TextContent)))
+        if (el.ChildElementCount is 0 &&
+            string.IsNullOrWhiteSpace(NormalizeWhitespace(el.TextContent)))
         {
           el.Remove();
           changed = true;
@@ -709,7 +794,7 @@ public sealed partial class HtmlPreprocessorPipeline
     }
   }
 
-  private static IReadOnlyList<HeadingInfo> ExtractHeadingInfos(IElement main)
+  private static ReadOnlyCollection<HeadingInfo> ExtractHeadingInfos(IElement main)
   {
     var tracker = new AnchorSlugTracker();
     var headings = new List<HeadingInfo>();
@@ -722,7 +807,11 @@ public sealed partial class HtmlPreprocessorPipeline
         continue;
       }
 
-      var level = int.Parse(el.TagName[1..]);
+      var level = int.Parse(
+        el.TagName.AsSpan(1),
+        NumberStyles.Integer,
+        CultureInfo.InvariantCulture
+      );
       var slug = tracker.NextSlug(text);
       headings.Add(new HeadingInfo(level, text, slug));
     }
@@ -768,7 +857,7 @@ public sealed partial class HtmlPreprocessorPipeline
     }
 
     var cut = normalized.LastIndexOf(' ', maxLength - 3);
-    if (cut < 20)
+    if (cut is < 20)
     {
       cut = maxLength - 3;
     }
@@ -793,10 +882,15 @@ public sealed partial class HtmlPreprocessorPipeline
   }
 
   public static string NormalizeWhitespace(string input) =>
-    MultiSpaceRegex().Replace(input.Replace('\u00A0', ' ').Replace('\u200B', ' ').Replace('\uFEFF', ' '), " ").Trim();
+    MultiSpaceRegex()
+      .Replace(
+        input.Replace('\u00A0', ' ').Replace('\u200B', ' ').Replace('\uFEFF', ' '),
+        " "
+      )
+      .Trim();
 }
 
-public sealed record PreprocessedHtmlResult(
+internal sealed record PreprocessedHtmlResult(
   string Title,
   string Summary,
   IReadOnlyList<string> Audience,
@@ -804,4 +898,5 @@ public sealed record PreprocessedHtmlResult(
   IReadOnlyList<string> LinksTo,
   string CleanHtml,
   string? HelpCenterVersion,
-  int DroppedInternalLinksCount);
+  int DroppedInternalLinksCount
+);

@@ -1,8 +1,8 @@
 using System.Collections.Concurrent;
 using System.Net;
 using AngleSharp;
-using OnspringDocs.Options;
 using Microsoft.Extensions.Logging;
+using OnspringDocs.Options;
 
 namespace OnspringDocs.Scraping;
 
@@ -10,7 +10,7 @@ namespace OnspringDocs.Scraping;
 /// Downloads MadCap TOC topics and performs bounded 1-hop discovery of linked internal pages
 /// using an authenticated <see cref="HttpClient"/> with deterministic retry/backoff.
 /// </summary>
-public sealed class HelpCenterFetcher
+internal sealed partial class HelpCenterFetcher(ILogger<HelpCenterFetcher> logger)
 {
   private static readonly TimeSpan[] RetryDelays =
   [
@@ -19,44 +19,42 @@ public sealed class HelpCenterFetcher
     TimeSpan.FromMilliseconds(2000),
   ];
 
-  private readonly ILogger<HelpCenterFetcher> _logger;
-  private readonly MadCapTocParser _tocParser = new();
-
-  public HelpCenterFetcher(ILogger<HelpCenterFetcher> logger)
-  {
-    _logger = logger;
-  }
-
   public async Task<FetchResult> FetchAllAsync(
     CookieContainer cookies,
     ScraperOptions options,
-    CancellationToken cancellationToken = default)
+    CancellationToken cancellationToken = default
+  )
   {
-    var handler = new HttpClientHandler
+    using var handler = new HttpClientHandler
     {
       CookieContainer = cookies,
       AutomaticDecompression = DecompressionMethods.All,
       AllowAutoRedirect = true,
+      CheckCertificateRevocationList = true,
     };
 
-    using var httpClient = new HttpClient(handler)
+    using var httpClient = new HttpClient(handler, disposeHandler: false)
     {
       BaseAddress = new Uri(options.BaseUrl),
       Timeout = TimeSpan.FromSeconds(30),
     };
 
-    _logger.LogInformation("Fetching MadCap TOC metadata...");
-    var tocResult = await _tocParser.ParseAsync(httpClient, cancellationToken);
-    _logger.LogInformation("Discovered {Count} unique TOC topics (BuildVersion={BuildVersion}).",
+    LogFetchingToc(logger);
+    var tocResult = await MadCapTocParser.ParseAsync(httpClient, cancellationToken).ConfigureAwait(false);
+    LogDiscoveredTopics(
+      logger,
       tocResult.EntriesByPath.Count,
-      tocResult.HelpSystem.BuildVersion);
+      tocResult.HelpSystem.BuildVersion
+    );
 
     var tocEntries = tocResult.EntriesByPath.Values
       .OrderBy(e => e.TocOrder)
       .ThenBy(e => e.CanonicalSourcePath, StringComparer.OrdinalIgnoreCase)
       .ToList();
 
-    var fetchedPages = new ConcurrentDictionary<string, FetchedPage>(StringComparer.OrdinalIgnoreCase);
+    var fetchedPages = new ConcurrentDictionary<string, FetchedPage>(
+      StringComparer.OrdinalIgnoreCase
+    );
     var failedUrls = new ConcurrentBag<string>();
 
     await Parallel.ForEachAsync(
@@ -68,8 +66,14 @@ public sealed class HelpCenterFetcher
       },
       async (entry, ct) =>
       {
-        var (ok, html, error) = await FetchWithRetryAsync(httpClient, entry.RequestPath, options.MaxRetries, ct);
-        if (!ok || html is null)
+        var (ok, html, error) = await FetchWithRetryAsync(
+          httpClient,
+          entry.RequestPath,
+          options.MaxRetries,
+          ct
+        ).ConfigureAwait(false);
+
+        if (ok is false || html is null)
         {
           failedUrls.Add($"{entry.CanonicalSourcePath} ({error})");
           return;
@@ -79,15 +83,18 @@ public sealed class HelpCenterFetcher
           entry.CanonicalSourcePath,
           entry.RequestPath,
           html,
-          entry);
-      });
+          entry
+        );
+      }
+    ).ConfigureAwait(false);
 
-    if (!failedUrls.IsEmpty)
+    if (failedUrls.IsEmpty is false)
     {
       var sortedFailures = failedUrls.OrderBy(x => x, StringComparer.Ordinal).ToList();
       throw new HttpRequestException(
         $"Failed to fetch {sortedFailures.Count} TOC topic(s):\n  " +
-        string.Join("\n  ", sortedFailures.Take(20)));
+        string.Join("\n  ", sortedFailures.Take(20))
+      );
     }
 
     var discoveredNonToc = new List<string>();
@@ -97,11 +104,12 @@ public sealed class HelpCenterFetcher
         fetchedPages.Values,
         tocResult.EntriesByPath,
         new Uri(options.BaseUrl),
-        cancellationToken);
+        cancellationToken
+      ).ConfigureAwait(false);
 
-      if (candidateLinks.Count > 0)
+      if (candidateLinks.Count is > 0)
       {
-        _logger.LogInformation("Checking {Count} internal .htm link(s) referenced outside TOC...", candidateLinks.Count);
+        LogCheckingNonTocLinks(logger, candidateLinks.Count);
         var baseOrder = tocResult.EntriesByPath.Count;
         var indexedCandidates = candidateLinks
           .Select((c, index) => (c.CanonicalPath, c.RequestPath, Order: baseOrder + index))
@@ -116,8 +124,14 @@ public sealed class HelpCenterFetcher
           },
           async (candidate, ct) =>
           {
-            var (ok, html, _) = await FetchWithRetryAsync(httpClient, candidate.RequestPath, options.MaxRetries, ct);
-            if (!ok || html is null)
+            var (ok, html, _) = await FetchWithRetryAsync(
+              httpClient,
+              candidate.RequestPath,
+              options.MaxRetries,
+              ct
+            ).ConfigureAwait(false);
+
+            if (ok is false || html is null)
             {
               return;
             }
@@ -128,22 +142,25 @@ public sealed class HelpCenterFetcher
               Path.GetFileNameWithoutExtension(candidate.CanonicalPath),
               candidate.Order,
               [],
-              InToc: false);
+              InToc: false
+            );
 
             fetchedPages[candidate.CanonicalPath] = new FetchedPage(
               candidate.CanonicalPath,
               candidate.RequestPath,
               html,
-              syntheticEntry);
-          });
+              syntheticEntry
+            );
+          }
+        ).ConfigureAwait(false);
 
         discoveredNonToc = fetchedPages.Values
-          .Where(p => !p.TocInfo.InToc)
+          .Where(p => p.TocInfo.InToc is false)
           .Select(p => p.CanonicalSourcePath)
           .OrderBy(p => p, StringComparer.OrdinalIgnoreCase)
           .ToList();
 
-        _logger.LogInformation("Included {Count} reachable non-TOC internal topic(s).", discoveredNonToc.Count);
+        LogIncludedNonTocLinks(logger, discoveredNonToc.Count);
       }
     }
 
@@ -159,15 +176,18 @@ public sealed class HelpCenterFetcher
     IEnumerable<FetchedPage> pages,
     IReadOnlyDictionary<string, TocEntry> tocEntries,
     Uri baseUri,
-    CancellationToken cancellationToken)
+    CancellationToken cancellationToken
+  )
   {
-    var context = BrowsingContext.New(Configuration.Default);
+    using var context = BrowsingContext.New(Configuration.Default);
     var candidates = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
     foreach (var page in pages)
     {
       cancellationToken.ThrowIfCancellationRequested();
-      var doc = await context.OpenAsync(req => req.Content(page.Html), cancellationToken);
+      using var doc = await context
+        .OpenAsync(req => req.Content(page.Html), cancellationToken)
+        .ConfigureAwait(false);
       var main = doc.QuerySelector("#mc-main-content") ?? doc.Body;
       if (main is null)
       {
@@ -187,25 +207,25 @@ public sealed class HelpCenterFetcher
           continue;
         }
 
-        if (!Uri.TryCreate(pageUri, href, out var resolved))
+        if (Uri.TryCreate(pageUri, href, out var resolved) is false)
         {
           continue;
         }
 
-        if (!string.Equals(resolved.Host, baseUri.Host, StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(resolved.Host, baseUri.Host, StringComparison.OrdinalIgnoreCase) is false)
         {
           continue;
         }
 
         var path = resolved.AbsolutePath;
-        if (!path.StartsWith("/Help/Content/", StringComparison.OrdinalIgnoreCase) ||
-            !path.EndsWith(".htm", StringComparison.OrdinalIgnoreCase))
+        if (path.StartsWith("/Help/Content/", StringComparison.OrdinalIgnoreCase) is false ||
+            path.EndsWith(".htm", StringComparison.OrdinalIgnoreCase) is false)
         {
           continue;
         }
 
         var (canonical, request) = MadCapTocParser.NormalizeContentUrl(path);
-        if (!tocEntries.ContainsKey(canonical) && !candidates.ContainsKey(canonical))
+        if (tocEntries.ContainsKey(canonical) is false && candidates.ContainsKey(canonical) is false)
         {
           candidates[canonical] = request;
         }
@@ -222,30 +242,40 @@ public sealed class HelpCenterFetcher
     HttpClient httpClient,
     string requestPath,
     int maxRetries,
-    CancellationToken cancellationToken)
+    CancellationToken cancellationToken
+  )
   {
     string? lastError = null;
+    var requestUri = new Uri(requestPath, UriKind.Relative);
 
     for (var attempt = 0; attempt <= maxRetries; attempt++)
     {
       try
       {
-        using var response = await httpClient.GetAsync(requestPath, cancellationToken);
+        using var response = await httpClient
+          .GetAsync(requestUri, cancellationToken)
+          .ConfigureAwait(false);
         if (response.IsSuccessStatusCode)
         {
-          var html = await response.Content.ReadAsStringAsync(cancellationToken);
+          var html = await response.Content
+            .ReadAsStringAsync(cancellationToken)
+            .ConfigureAwait(false);
           return (true, html, null);
         }
 
         var statusCode = (int)response.StatusCode;
         lastError = $"HTTP {statusCode}";
 
-        if (statusCode != 429 && statusCode < 500)
+        if (statusCode is not 429 and < 500)
         {
           return (false, null, lastError);
         }
       }
-      catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException && !cancellationToken.IsCancellationRequested)
+      catch (HttpRequestException ex)
+      {
+        lastError = ex.Message;
+      }
+      catch (TaskCanceledException ex) when (cancellationToken.IsCancellationRequested is false)
       {
         lastError = ex.Message;
       }
@@ -253,10 +283,38 @@ public sealed class HelpCenterFetcher
       if (attempt < maxRetries)
       {
         var delay = attempt < RetryDelays.Length ? RetryDelays[attempt] : RetryDelays[^1];
-        await Task.Delay(delay, cancellationToken);
+        await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
       }
     }
 
     return (false, null, lastError ?? "Unknown fetch error");
   }
+
+  [LoggerMessage(
+    Level = LogLevel.Information,
+    Message = "Fetching MadCap TOC metadata..."
+  )]
+  private static partial void LogFetchingToc(ILogger logger);
+
+  [LoggerMessage(
+    Level = LogLevel.Information,
+    Message = "Discovered {Count} unique TOC topics (BuildVersion={BuildVersion})."
+  )]
+  private static partial void LogDiscoveredTopics(
+    ILogger logger,
+    int count,
+    string buildVersion
+  );
+
+  [LoggerMessage(
+    Level = LogLevel.Information,
+    Message = "Checking {Count} internal .htm link(s) referenced outside TOC..."
+  )]
+  private static partial void LogCheckingNonTocLinks(ILogger logger, int count);
+
+  [LoggerMessage(
+    Level = LogLevel.Information,
+    Message = "Included {Count} reachable non-TOC internal topic(s)."
+  )]
+  private static partial void LogIncludedNonTocLinks(ILogger logger, int count);
 }

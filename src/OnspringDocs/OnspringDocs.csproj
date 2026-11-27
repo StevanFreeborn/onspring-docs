@@ -4,9 +4,6 @@
     <OutputType>Exe</OutputType>
     <AssemblyName>onspring-docs</AssemblyName>
     <RootNamespace>OnspringDocs</RootNamespace>
-    <TargetFramework>net11.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
     <PublishAot>true</PublishAot>
     <InvariantGlobalization>true</InvariantGlobalization>
     <StripSymbols>true</StripSymbols>

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using System.Xml.Linq;
@@ -7,13 +8,14 @@ namespace OnspringDocs.Scraping;
 /// <summary>
 /// Parses MadCap Flare HelpSystem.xml and RequireJS TOC chunk files into a deterministic hierarchy.
 /// </summary>
-public sealed class MadCapTocParser
+internal static class MadCapTocParser
 {
   private sealed record ChunkTopicRef(
     string? CanonicalSourcePath,
     string? RequestPath,
     string Title,
-    string Bookmark);
+    string Bookmark
+  );
 
   private sealed class MutableTocEntry
   {
@@ -25,13 +27,20 @@ public sealed class MadCapTocParser
     public HashSet<string> SeenPaths { get; } = new(StringComparer.Ordinal);
   }
 
-  public async Task<MadCapTocResult> ParseAsync(HttpClient httpClient, CancellationToken cancellationToken = default)
+  public static async Task<MadCapTocResult> ParseAsync(
+    HttpClient httpClient,
+    CancellationToken cancellationToken = default
+  )
   {
-    var helpSystemXml = await httpClient.GetStringAsync("/Help/Data/HelpSystem.xml", cancellationToken);
+    var helpSystemXml = await httpClient
+      .GetStringAsync(new Uri("/Help/Data/HelpSystem.xml", UriKind.Relative), cancellationToken)
+      .ConfigureAwait(false);
     var helpSystem = ParseHelpSystemXml(helpSystemXml);
 
     var tocRequestPath = NormalizeHelpRelativePath(helpSystem.TocRelativePath);
-    var tocJs = await httpClient.GetStringAsync(tocRequestPath, cancellationToken);
+    var tocJs = await httpClient
+      .GetStringAsync(new Uri(tocRequestPath, UriKind.Relative), cancellationToken)
+      .ConfigureAwait(false);
     var tocJson = JsObjectLiteralToJson(tocJs);
 
     using var tocDoc = JsonDocument.Parse(tocJson);
@@ -45,7 +54,9 @@ public sealed class MadCapTocParser
     for (var chunkIndex = 0; chunkIndex < numChunks; chunkIndex++)
     {
       var chunkPath = $"{tocDir}{prefix}{chunkIndex}.js";
-      var chunkJs = await httpClient.GetStringAsync(chunkPath, cancellationToken);
+      var chunkJs = await httpClient
+        .GetStringAsync(new Uri(chunkPath, UriKind.Relative), cancellationToken)
+        .ConfigureAwait(false);
       chunkPayloads.Add(chunkJs);
     }
 
@@ -68,7 +79,8 @@ public sealed class MadCapTocParser
   internal static MadCapTocResult ParseFromPayloads(
     HelpSystemMetadata helpSystem,
     string tocRootJs,
-    IReadOnlyList<string> chunkJsPayloads)
+    IReadOnlyList<string> chunkJsPayloads
+  )
   {
     var byChunkAndId = new Dictionary<(int ChunkIndex, int NodeId), ChunkTopicRef>();
     var byNodeId = new Dictionary<int, ChunkTopicRef>();
@@ -94,7 +106,7 @@ public sealed class MadCapTocParser
         var titles = obj.TryGetProperty("t", out var tEl) ? tEl : default;
         var bookmarks = obj.TryGetProperty("b", out var bEl) ? bEl : default;
 
-        if (ids.ValueKind != JsonValueKind.Array)
+        if (ids.ValueKind is not JsonValueKind.Array)
         {
           continue;
         }
@@ -103,14 +115,19 @@ public sealed class MadCapTocParser
         for (var idx = 0; idx < count; idx++)
         {
           var nodeId = ids[idx].GetInt32();
-          var title = titles.ValueKind == JsonValueKind.Array && idx < titles.GetArrayLength()
+          var title = titles.ValueKind is JsonValueKind.Array && idx < titles.GetArrayLength()
             ? titles[idx].GetString() ?? string.Empty
             : string.Empty;
-          var bookmark = bookmarks.ValueKind == JsonValueKind.Array && idx < bookmarks.GetArrayLength()
+          var bookmark = bookmarks.ValueKind is JsonValueKind.Array && idx < bookmarks.GetArrayLength()
             ? bookmarks[idx].GetString() ?? string.Empty
             : string.Empty;
 
-          var topicRef = new ChunkTopicRef(canonicalPath, requestPath, NormalizeText(title), bookmark);
+          var topicRef = new ChunkTopicRef(
+            canonicalPath,
+            requestPath,
+            NormalizeText(title),
+            bookmark
+          );
           byChunkAndId[(chunkIndex, nodeId)] = topicRef;
           byNodeId.TryAdd(nodeId, topicRef);
         }
@@ -126,17 +143,19 @@ public sealed class MadCapTocParser
 
     if (tocDoc.RootElement.TryGetProperty("tree", out var treeEl) &&
         treeEl.TryGetProperty("n", out var rootArray) &&
-        rootArray.ValueKind == JsonValueKind.Array)
+        rootArray.ValueKind is JsonValueKind.Array)
     {
       foreach (var childEl in rootArray.EnumerateArray())
       {
-        rootNodes.Add(WalkTreeNode(childEl, [], byChunkAndId, byNodeId, entries, ref nextOrder));
+        rootNodes.Add(
+          WalkTreeNode(childEl, [], byChunkAndId, byNodeId, entries, ref nextOrder)
+        );
       }
     }
 
     // Ensure DefaultUrl (e.g., /Help/Content/Home.htm) is always included.
     var (defaultCanonical, defaultRequest) = NormalizeContentUrl(helpSystem.DefaultUrl);
-    if (!entries.ContainsKey(defaultCanonical))
+    if (entries.ContainsKey(defaultCanonical) is false)
     {
       entries[defaultCanonical] = new MutableTocEntry
       {
@@ -157,8 +176,10 @@ public sealed class MadCapTocParser
         kv.Value.PrimaryTitle,
         kv.Value.TocOrder,
         kv.Value.TocPaths.AsReadOnly(),
-        InToc: true),
-      StringComparer.OrdinalIgnoreCase);
+        InToc: true
+      ),
+      StringComparer.OrdinalIgnoreCase
+    );
 
     return new MadCapTocResult(helpSystem, rootNodes.AsReadOnly(), frozenEntries);
   }
@@ -169,7 +190,8 @@ public sealed class MadCapTocParser
     Dictionary<(int ChunkIndex, int NodeId), ChunkTopicRef> byChunkAndId,
     Dictionary<int, ChunkTopicRef> byNodeId,
     Dictionary<string, MutableTocEntry> entries,
-    ref int nextOrder)
+    ref int nextOrder
+  )
   {
     var nodeId = nodeEl.TryGetProperty("i", out var iEl) ? iEl.GetInt32() : -1;
     int? chunkIndex = nodeEl.TryGetProperty("c", out var cEl) ? cEl.GetInt32() : null;
@@ -179,7 +201,7 @@ public sealed class MadCapTocParser
     {
       topicRef = exactRef;
     }
-    else if (nodeId >= 0 && byNodeId.TryGetValue(nodeId, out var fallbackRef))
+    else if (nodeId is >= 0 && byNodeId.TryGetValue(nodeId, out var fallbackRef))
     {
       topicRef = fallbackRef;
     }
@@ -189,11 +211,13 @@ public sealed class MadCapTocParser
     {
       title = NormalizeText(tEl.GetString() ?? string.Empty);
     }
+
     title = string.IsNullOrWhiteSpace(title) ? $"Topic {nodeId}" : title;
 
     var trail = new List<string>(parentTrail.Count + 1);
     trail.AddRange(parentTrail);
-    if (trail.Count == 0 || !string.Equals(trail[^1], title, StringComparison.OrdinalIgnoreCase))
+    if (trail.Count is 0 ||
+        string.Equals(trail[^1], title, StringComparison.OrdinalIgnoreCase) is false)
     {
       trail.Add(title);
     }
@@ -204,7 +228,7 @@ public sealed class MadCapTocParser
       canonicalPath = topicRef.CanonicalSourcePath;
       var breadcrumb = string.Join(" > ", trail);
 
-      if (!entries.TryGetValue(canonicalPath, out var entry))
+      if (entries.TryGetValue(canonicalPath, out var entry) is false)
       {
         entry = new MutableTocEntry
         {
@@ -223,11 +247,14 @@ public sealed class MadCapTocParser
     }
 
     var children = new List<TocTreeNode>();
-    if (nodeEl.TryGetProperty("n", out var childrenEl) && childrenEl.ValueKind == JsonValueKind.Array)
+    if (nodeEl.TryGetProperty("n", out var childrenEl) &&
+        childrenEl.ValueKind is JsonValueKind.Array)
     {
       foreach (var childEl in childrenEl.EnumerateArray())
       {
-        children.Add(WalkTreeNode(childEl, trail, byChunkAndId, byNodeId, entries, ref nextOrder));
+        children.Add(
+          WalkTreeNode(childEl, trail, byChunkAndId, byNodeId, entries, ref nextOrder)
+        );
       }
     }
 
@@ -238,8 +265,8 @@ public sealed class MadCapTocParser
   {
     var trimmed = rawPath.Split('#')[0].Split('?')[0].Trim();
     return trimmed.StartsWith("/Content/", StringComparison.OrdinalIgnoreCase) &&
-           (trimmed.EndsWith(".htm", StringComparison.OrdinalIgnoreCase) ||
-            trimmed.EndsWith(".html", StringComparison.OrdinalIgnoreCase));
+      (trimmed.EndsWith(".htm", StringComparison.OrdinalIgnoreCase) ||
+        trimmed.EndsWith(".html", StringComparison.OrdinalIgnoreCase));
   }
 
   /// <summary>
@@ -250,12 +277,12 @@ public sealed class MadCapTocParser
   public static (string CanonicalPath, string RequestPath) NormalizeContentUrl(string rawPath)
   {
     var withoutFragment = rawPath.Split('#')[0].Split('?')[0].Trim();
-    if (!withoutFragment.StartsWith('/'))
+    if (withoutFragment.StartsWith('/') is false)
     {
       withoutFragment = "/" + withoutFragment;
     }
 
-    if (!withoutFragment.StartsWith("/Help/", StringComparison.OrdinalIgnoreCase))
+    if (withoutFragment.StartsWith("/Help/", StringComparison.OrdinalIgnoreCase) is false)
     {
       withoutFragment = "/Help" + withoutFragment;
     }
@@ -264,7 +291,7 @@ public sealed class MadCapTocParser
     var escapedSegments = decoded
       .Split('/', StringSplitOptions.RemoveEmptyEntries)
       .Select(Uri.EscapeDataString);
-    var requestPath = "/" + string.Join("/", escapedSegments);
+    var requestPath = "/" + string.Join('/', escapedSegments);
 
     return (decoded, requestPath);
   }
@@ -276,6 +303,7 @@ public sealed class MadCapTocParser
     {
       return trimmed;
     }
+
     return "/Help/" + trimmed.TrimStart('/');
   }
 
@@ -289,7 +317,7 @@ public sealed class MadCapTocParser
   internal static string JsObjectLiteralToJson(string definePayload)
   {
     var span = definePayload.AsSpan().Trim();
-    if (span.Length > 0 && span[0] == '\uFEFF')
+    if (span.Length is > 0 && span[0] is '\uFEFF')
     {
       span = span[1..].TrimStart();
     }
@@ -301,7 +329,7 @@ public sealed class MadCapTocParser
       {
         span = span[..^2].TrimEnd();
       }
-      else if (span.EndsWith(")", StringComparison.Ordinal))
+      else if (span.EndsWith(')'))
       {
         span = span[..^1].TrimEnd();
       }
@@ -322,7 +350,7 @@ public sealed class MadCapTocParser
       }
 
       // Single-quoted or double-quoted JS string
-      if (ch == '\'' || ch == '"')
+      if (ch is '\'' or '"')
       {
         var quote = ch;
         sb.Append('"');
@@ -330,27 +358,30 @@ public sealed class MadCapTocParser
         while (i < span.Length)
         {
           var c = span[i];
-          if (c == '\\' && i + 1 < span.Length)
+          if (c is '\\' && i + 1 < span.Length)
           {
             var next = span[i + 1];
-            if (next == '\'')
+            if (next is '\'')
             {
               sb.Append('\'');
               i += 2;
               continue;
             }
-            if (next == '"')
+
+            if (next is '"')
             {
               sb.Append("\\\"");
               i += 2;
               continue;
             }
-            if (next == 'x' && i + 3 < span.Length)
+
+            if (next is 'x' && i + 3 < span.Length)
             {
               sb.Append("\\u00").Append(span[(i + 2)..(i + 4)]);
               i += 4;
               continue;
             }
+
             if (next is '\\' or '/' or 'b' or 'f' or 'n' or 'r' or 't' or 'u')
             {
               sb.Append('\\').Append(next);
@@ -369,13 +400,13 @@ public sealed class MadCapTocParser
             break;
           }
 
-          if (c == '"')
+          if (c is '"')
           {
             sb.Append("\\\"");
           }
-          else if (c < 0x20)
+          else if (c is < '\x20')
           {
-            sb.Append($"\\u{(int)c:x4}");
+            sb.Append(CultureInfo.InvariantCulture, $"\\u{(int)c:x4}");
           }
           else
           {
@@ -384,12 +415,13 @@ public sealed class MadCapTocParser
 
           i++;
         }
+
         sb.Append('"');
         expectingKey = false;
         continue;
       }
 
-      if (ch == '{')
+      if (ch is '{')
       {
         sb.Append('{');
         containerStack.Push('{');
@@ -397,7 +429,7 @@ public sealed class MadCapTocParser
         continue;
       }
 
-      if (ch == '[')
+      if (ch is '[')
       {
         sb.Append('[');
         containerStack.Push('[');
@@ -405,18 +437,19 @@ public sealed class MadCapTocParser
         continue;
       }
 
-      if (ch == '}' || ch == ']')
+      if (ch is '}' or ']')
       {
         sb.Append(ch);
-        if (containerStack.Count > 0)
+        if (containerStack.Count is > 0)
         {
           containerStack.Pop();
         }
+
         expectingKey = false;
         continue;
       }
 
-      if (ch == ',')
+      if (ch is ',')
       {
         // Look ahead to skip trailing commas before '}' or ']'
         var lookahead = i + 1;
@@ -425,17 +458,17 @@ public sealed class MadCapTocParser
           lookahead++;
         }
 
-        if (lookahead < span.Length && (span[lookahead] == '}' || span[lookahead] == ']'))
+        if (lookahead < span.Length && span[lookahead] is '}' or ']')
         {
           continue;
         }
 
         sb.Append(',');
-        expectingKey = containerStack.Count > 0 && containerStack.Peek() == '{';
+        expectingKey = containerStack.Count is > 0 && containerStack.Peek() is '{';
         continue;
       }
 
-      if (ch == ':')
+      if (ch is ':')
       {
         sb.Append(':');
         expectingKey = false;
@@ -443,10 +476,11 @@ public sealed class MadCapTocParser
       }
 
       // Unquoted JS object key identifier
-      if (expectingKey && (char.IsLetter(ch) || ch == '_' || ch == '$'))
+      if (expectingKey && (char.IsLetter(ch) || ch is '_' or '$'))
       {
         var start = i;
-        while (i + 1 < span.Length && (char.IsLetterOrDigit(span[i + 1]) || span[i + 1] == '_' || span[i + 1] == '$'))
+        while (i + 1 < span.Length &&
+               (char.IsLetterOrDigit(span[i + 1]) || span[i + 1] is '_' or '$'))
         {
           i++;
         }

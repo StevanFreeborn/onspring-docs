@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -6,11 +7,16 @@ namespace OnspringDocs.Processing;
 /// <summary>
 /// Generates deterministic GitHub-Flavored Markdown heading slugs and tracks per-document uniqueness.
 /// </summary>
-public static partial class AnchorSlugger
+internal static partial class AnchorSlugger
 {
   [GeneratedRegex(@"\s+")]
   private static partial Regex WhitespaceRunRegex();
 
+  [SuppressMessage(
+    "Globalization",
+    "CA1308:Normalize strings to uppercase",
+    Justification = "GitHub-Flavored Markdown heading slugs are lowercase."
+  )]
   public static string Slugify(string headingText)
   {
     if (string.IsNullOrWhiteSpace(headingText))
@@ -27,7 +33,7 @@ public static partial class AnchorSlugger
     var sb = new StringBuilder(normalized.Length);
     foreach (var ch in normalized)
     {
-      if (char.IsLetterOrDigit(ch) || ch == '-' || ch == '_' || char.IsWhiteSpace(ch))
+      if (char.IsLetterOrDigit(ch) || ch is '-' or '_' || char.IsWhiteSpace(ch))
       {
         sb.Append(ch);
       }
@@ -41,7 +47,7 @@ public static partial class AnchorSlugger
 /// <summary>
 /// Tracks generated heading slugs within a single document so duplicate headings receive deterministic suffixes.
 /// </summary>
-public sealed class AnchorSlugTracker
+internal sealed class AnchorSlugTracker
 {
   private readonly HashSet<string> _usedSlugs = new(StringComparer.Ordinal);
 
@@ -61,6 +67,7 @@ public sealed class AnchorSlugTracker
       {
         return candidate;
       }
+
       suffix++;
     }
   }

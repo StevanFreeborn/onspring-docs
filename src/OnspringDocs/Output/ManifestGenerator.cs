@@ -11,18 +11,21 @@ namespace OnspringDocs.Output;
 /// Generates a deterministic, machine-readable <c>manifest.json</c> catalog for RAG pipelines and validation
 /// using source-generated <see cref="System.Text.Json"/> serialization for Native AOT compatibility.
 /// </summary>
-public static partial class ManifestGenerator
+internal static partial class ManifestGenerator
 {
-  private static readonly ManifestJsonContext JsonContext = new(new JsonSerializerOptions
-  {
-    WriteIndented = true,
-    Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
-  });
+  private static readonly ManifestJsonContext JsonContext = new(
+    new JsonSerializerOptions
+    {
+      WriteIndented = true,
+      Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+    }
+  );
 
   public static string GenerateManifestJson(
     MadCapTocResult tocResult,
     CorpusProcessingResult corpus,
-    ScraperOptions options)
+    ScraperOptions options
+  )
   {
     var sectionCounts = new SortedDictionary<string, int>(StringComparer.Ordinal);
     foreach (var doc in corpus.Documents)
@@ -47,38 +50,42 @@ public static partial class ManifestGenerator
       Sections = sectionCounts,
       Documents = corpus.Documents
         .OrderBy(d => d.Route.Id, StringComparer.Ordinal)
-        .Select(d => new ManifestDocumentEntry
-        {
-          Id = d.Route.Id,
-          Path = d.Route.RelativeMarkdownPath,
-          SourcePath = d.Route.CanonicalSourcePath,
-          Title = d.Title,
-          Summary = d.Summary,
-          Section = d.Route.Section,
-          DocType = d.Route.DocType,
-          Audience = d.Audience,
-          TocPaths = d.Route.TocInfo.TocPaths,
-          InToc = d.Route.TocInfo.InToc,
-          Headings = d.Headings.Select(h => new ManifestHeadingEntry
+        .Select(
+          d => new ManifestDocumentEntry
           {
-            Level = h.Level,
-            Text = h.Text,
-            Slug = h.Slug,
-          }).ToList(),
-          LinksTo = d.LinksTo,
-          WordCount = d.WordCount,
-          CharCount = d.CharCount,
-          Sha256 = d.Sha256,
-        })
+            Id = d.Route.Id,
+            Path = d.Route.RelativeMarkdownPath,
+            SourcePath = d.Route.CanonicalSourcePath,
+            Title = d.Title,
+            Summary = d.Summary,
+            Section = d.Route.Section,
+            DocType = d.Route.DocType,
+            Audience = d.Audience,
+            TocPaths = d.Route.TocInfo.TocPaths,
+            InToc = d.Route.TocInfo.InToc,
+            Headings = d.Headings.Select(
+              h => new ManifestHeadingEntry
+              {
+                Level = h.Level,
+                Text = h.Text,
+                Slug = h.Slug,
+              }
+            ).ToList(),
+            LinksTo = d.LinksTo,
+            WordCount = d.WordCount,
+            CharCount = d.CharCount,
+            Sha256 = d.Sha256,
+          }
+        )
         .ToList(),
     };
 
     var json = JsonSerializer.Serialize(manifest, JsonContext.ManifestModel);
-    return json.Replace("\r\n", "\n") + "\n";
+    return json.Replace("\r\n", "\n", StringComparison.Ordinal) + "\n";
   }
 
   [JsonSerializable(typeof(ManifestModel))]
-  internal partial class ManifestJsonContext : JsonSerializerContext;
+  internal sealed partial class ManifestJsonContext : JsonSerializerContext;
 
   internal sealed class ManifestModel
   {

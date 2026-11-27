@@ -18,7 +18,8 @@ public sealed class PathMapperTests
     string sourcePath,
     string expectedId,
     string expectedSection,
-    string expectedDocType)
+    string expectedDocType
+  )
   {
     var entry = new TocEntry(sourcePath, sourcePath, "Title", 0, [], true);
     var routes = PathMapper.MapRoutes([entry]);
@@ -35,13 +36,30 @@ public sealed class PathMapperTests
   {
     var entries = new[]
     {
-      new TocEntry("/Help/Content/EndUsers/My_Topic.htm", "/Help/Content/EndUsers/My_Topic.htm", "A", 0, [], true),
-      new TocEntry("/Help/Content/EndUsers/MyTopic.htm", "/Help/Content/EndUsers/MyTopic.htm", "B", 1, [], true),
+      new TocEntry(
+        "/Help/Content/EndUsers/My_Topic.htm",
+        "/Help/Content/EndUsers/My_Topic.htm",
+        "A",
+        0,
+        [],
+        true
+      ),
+      new TocEntry(
+        "/Help/Content/EndUsers/MyTopic.htm",
+        "/Help/Content/EndUsers/MyTopic.htm",
+        "B",
+        1,
+        [],
+        true
+      ),
     };
 
     var routes = PathMapper.MapRoutes(entries);
 
-    Assert.Equal(["end-users/my-topic", "end-users/my-topic-2"], routes.Select(r => r.Id).ToArray());
+    Assert.Equal(
+      ["end-users/my-topic", "end-users/my-topic-2"],
+      routes.Select(r => r.Id).ToArray()
+    );
   }
 
   [Fact]

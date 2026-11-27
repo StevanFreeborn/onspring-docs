@@ -67,58 +67,110 @@ public sealed class HtmlToMarkdownPipelineTests
 
     var pages = new[]
     {
-      CreatePage("/Help/Content/Home.htm", "Getting Started", 0, ["Getting Started"], homeHtml),
-      CreatePage("/Help/Content/FAQs/AdministratorFAQs.htm", "Administrator FAQs", 1, ["FAQs > Administrator FAQs"], faqHtml),
-      CreatePage("/Help/Content/Administrators/Apps/TriggersOutcomes/RESTAPI/ConfigureRESTAPIOutcome.htm", "Configure a REST API Outcome", 2, ["Administrators > REST API"], restApiHtml),
-      CreatePage("/Help/Content/Videos/AddingUsersVideo.htm", "Video: Adding Users", 3, ["Videos > Adding Users"], videoHtml),
+      CreatePage(
+        "/Help/Content/Home.htm",
+        "Getting Started",
+        0,
+        ["Getting Started"],
+        homeHtml
+      ),
+      CreatePage(
+        "/Help/Content/FAQs/AdministratorFAQs.htm",
+        "Administrator FAQs",
+        1,
+        ["FAQs > Administrator FAQs"],
+        faqHtml
+      ),
+      CreatePage(
+        "/Help/Content/Administrators/Apps/TriggersOutcomes/RESTAPI/ConfigureRESTAPIOutcome.htm",
+        "Configure a REST API Outcome",
+        2,
+        ["Administrators > REST API"],
+        restApiHtml
+      ),
+      CreatePage(
+        "/Help/Content/Videos/AddingUsersVideo.htm",
+        "Video: Adding Users",
+        3,
+        ["Videos > Adding Users"],
+        videoHtml
+      ),
     };
 
-    var converter = new MarkdownDocumentConverter();
-    var corpus = await converter.ConvertCorpusAsync(pages, new ScraperOptions
-    {
-      BaseUrl = "https://example.com",
-      Username = "u",
-      Password = "p",
-    }, TestContext.Current.CancellationToken);
+    var corpus = await MarkdownDocumentConverter.ConvertCorpusAsync(
+      pages,
+      new ScraperOptions
+      {
+        BaseUrl = "https://example.com",
+        Username = "u",
+        Password = "p",
+      },
+      TestContext.Current.CancellationToken
+    );
 
-    var homeDoc = corpus.Documents.Single(d => d.Route.Id == "home");
+    var homeDoc = corpus.Documents.Single(d => d.Route.Id is "home");
     Assert.Equal("Welcome to the Onspring Help Center", homeDoc.Title);
-    Assert.Contains("# Welcome to the Onspring Help Center", homeDoc.MarkdownContent);
-    Assert.Contains("## Don't Miss the Latest Help!", homeDoc.MarkdownContent);
+    Assert.Contains("# Welcome to the Onspring Help Center", homeDoc.MarkdownContent, StringComparison.Ordinal);
+    Assert.Contains("## Don't Miss the Latest Help!", homeDoc.MarkdownContent, StringComparison.Ordinal);
 
-    var faqDoc = corpus.Documents.Single(d => d.Route.Id == "faqs/administrator-faqs");
-    Assert.Contains("audience:\n  - Administrators", faqDoc.MarkdownContent);
-    Assert.Contains("# Administrator FAQs", faqDoc.MarkdownContent);
-    Assert.Contains("## Access FAQs", faqDoc.MarkdownContent);
-    Assert.Contains("### How do I get support?", faqDoc.MarkdownContent);
-    Assert.Contains("### How do I check roles?", faqDoc.MarkdownContent);
-    Assert.DoesNotContain("#### How do I check roles?", faqDoc.MarkdownContent);
-    Assert.Contains("**Security > Roles**", faqDoc.MarkdownContent);
-    Assert.Contains("Email support@onspring.com", faqDoc.MarkdownContent);
-    Assert.Contains("[Define General Settings](../administrators/apps/triggers-outcomes/rest-api/configure-rest-api-outcome.md#define-general-settings)", faqDoc.MarkdownContent);
-    Assert.DoesNotContain("transparent.gif", faqDoc.MarkdownContent);
-    Assert.DoesNotContain("[email", faqDoc.MarkdownContent);
-    Assert.DoesNotContain("\u00A0", faqDoc.MarkdownContent);
-    Assert.DoesNotContain("\r\n", faqDoc.MarkdownContent);
+    var faqDoc = corpus.Documents.Single(d => d.Route.Id is "faqs/administrator-faqs");
+    Assert.Contains("audience:\n  - Administrators", faqDoc.MarkdownContent, StringComparison.Ordinal);
+    Assert.Contains("# Administrator FAQs", faqDoc.MarkdownContent, StringComparison.Ordinal);
+    Assert.Contains("## Access FAQs", faqDoc.MarkdownContent, StringComparison.Ordinal);
+    Assert.Contains("### How do I get support?", faqDoc.MarkdownContent, StringComparison.Ordinal);
+    Assert.Contains("### How do I check roles?", faqDoc.MarkdownContent, StringComparison.Ordinal);
+    Assert.DoesNotContain("#### How do I check roles?", faqDoc.MarkdownContent, StringComparison.Ordinal);
+    Assert.Contains("**Security > Roles**", faqDoc.MarkdownContent, StringComparison.Ordinal);
+    Assert.Contains("Email support@onspring.com", faqDoc.MarkdownContent, StringComparison.Ordinal);
+    Assert.Contains(
+      "[Define General Settings](../administrators/apps/triggers-outcomes/rest-api/configure-rest-api-outcome.md#define-general-settings)",
+      faqDoc.MarkdownContent,
+      StringComparison.Ordinal
+    );
+    Assert.DoesNotContain("transparent.gif", faqDoc.MarkdownContent, StringComparison.Ordinal);
+    Assert.DoesNotContain("[email", faqDoc.MarkdownContent, StringComparison.Ordinal);
+    Assert.DoesNotContain("\u00A0", faqDoc.MarkdownContent, StringComparison.Ordinal);
+    Assert.DoesNotContain("\r\n", faqDoc.MarkdownContent, StringComparison.Ordinal);
 
-    var restDoc = corpus.Documents.Single(d => d.Route.Id == "administrators/apps/triggers-outcomes/rest-api/configure-rest-api-outcome");
-    Assert.Contains("`DateDiff(end_date, start_date, format)`", restDoc.MarkdownContent);
-    Assert.Contains("> **IMPORTANT:** Test carefully before enabling.", restDoc.MarkdownContent);
-    Assert.Contains("| Arg | Description |", restDoc.MarkdownContent);
-    Assert.DoesNotContain("Resources/Images", restDoc.MarkdownContent);
-    Assert.DoesNotContain("kanchor", restDoc.MarkdownContent);
+    var restDoc = corpus.Documents.Single(
+      d => d.Route.Id is "administrators/apps/triggers-outcomes/rest-api/configure-rest-api-outcome"
+    );
+    Assert.Contains(
+      "`DateDiff(end_date, start_date, format)`",
+      restDoc.MarkdownContent,
+      StringComparison.Ordinal
+    );
+    Assert.Contains(
+      "> **IMPORTANT:** Test carefully before enabling.",
+      restDoc.MarkdownContent,
+      StringComparison.Ordinal
+    );
+    Assert.Contains("| Arg | Description |", restDoc.MarkdownContent, StringComparison.Ordinal);
+    Assert.DoesNotContain("Resources/Images", restDoc.MarkdownContent, StringComparison.Ordinal);
+    Assert.DoesNotContain("kanchor", restDoc.MarkdownContent, StringComparison.Ordinal);
 
-    var videoDoc = corpus.Documents.Single(d => d.Route.Id == "videos/adding-users-video");
-    Assert.Contains("[Watch embedded video](https://players.brightcove.net/123/index.html?videoId=999)", videoDoc.MarkdownContent);
+    var videoDoc = corpus.Documents.Single(d => d.Route.Id is "videos/adding-users-video");
+    Assert.Contains(
+      "[Watch embedded video](https://players.brightcove.net/123/index.html?videoId=999)",
+      videoDoc.MarkdownContent,
+      StringComparison.Ordinal
+    );
   }
 
-  private static FetchedPage CreatePage(string path, string title, int order, string[] tocPaths, string html)
+  private static FetchedPage CreatePage(
+    string path,
+    string title,
+    int order,
+    string[] tocPaths,
+    string html
+  )
   {
     var (_, requestPath) = MadCapTocParser.NormalizeContentUrl(path);
     return new FetchedPage(
       path,
       requestPath,
       html,
-      new TocEntry(path, requestPath, title, order, tocPaths, InToc: true));
+      new TocEntry(path, requestPath, title, order, tocPaths, InToc: true)
+    );
   }
 }

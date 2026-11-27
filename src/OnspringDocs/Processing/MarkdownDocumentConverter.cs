@@ -10,7 +10,7 @@ namespace OnspringDocs.Processing;
 /// <summary>
 /// Converts preprocessed Help Center HTML into deterministic GitHub-Flavored Markdown with YAML frontmatter.
 /// </summary>
-public sealed partial class MarkdownDocumentConverter
+internal static partial class MarkdownDocumentConverter
 {
   [GeneratedRegex(@"\n{3,}")]
   private static partial Regex ExcessNewlinesRegex();
@@ -22,7 +22,6 @@ public sealed partial class MarkdownDocumentConverter
   private static partial Regex WordSplitRegex();
 
   private static readonly UTF8Encoding Utf8NoBom = new(encoderShouldEmitUTF8Identifier: false);
-  private readonly HtmlPreprocessorPipeline _pipeline = new();
 
   private static Converter CreateConverter()
   {
@@ -54,10 +53,11 @@ public sealed partial class MarkdownDocumentConverter
     return new Converter(config);
   }
 
-  public async Task<CorpusProcessingResult> ConvertCorpusAsync(
+  public static async Task<CorpusProcessingResult> ConvertCorpusAsync(
     IReadOnlyList<FetchedPage> fetchedPages,
     ScraperOptions options,
-    CancellationToken cancellationToken = default)
+    CancellationToken cancellationToken = default
+  )
   {
     var allRoutes = PathMapper.MapRoutes(fetchedPages.Select(p => p.TocInfo));
     var includedRoutes = PathMapper.FilterRoutes(allRoutes, options);
@@ -65,16 +65,18 @@ public sealed partial class MarkdownDocumentConverter
     var pagesByCanonical = fetchedPages.ToDictionary(
       p => p.CanonicalSourcePath,
       p => p,
-      StringComparer.OrdinalIgnoreCase);
+      StringComparer.OrdinalIgnoreCase
+    );
 
     var includedItems = includedRoutes
       .Select(route => (Route: route, Page: pagesByCanonical[route.CanonicalSourcePath]))
       .ToList();
 
-    var corpusIndex = await _pipeline.BuildCorpusAnchorIndexAsync(
+    var corpusIndex = await HtmlPreprocessorPipeline.BuildCorpusAnchorIndexAsync(
       includedItems,
       options.MaxConcurrency,
-      cancellationToken);
+      cancellationToken
+    ).ConfigureAwait(false);
 
     var processed = new ProcessedDocument[includedItems.Count];
     var indexedItems = includedItems.Select((item, idx) => (item.Route, item.Page, Index: idx));
@@ -83,10 +85,19 @@ public sealed partial class MarkdownDocumentConverter
 
     await Parallel.ForEachAsync(
       indexedItems,
-      new ParallelOptions { MaxDegreeOfParallelism = options.MaxConcurrency, CancellationToken = cancellationToken },
+      new ParallelOptions
+      {
+        MaxDegreeOfParallelism = options.MaxConcurrency,
+        CancellationToken = cancellationToken,
+      },
       async (entry, ct) =>
       {
-        var pre = await _pipeline.PreprocessDocumentAsync(entry.Route, entry.Page.Html, corpusIndex, ct);
+        var pre = await HtmlPreprocessorPipeline.PreprocessDocumentAsync(
+          entry.Route,
+          entry.Page.Html,
+          corpusIndex,
+          ct
+        ).ConfigureAwait(false);
         var converter = localConverter.Value!;
         var rawMarkdown = converter.Convert(pre.CleanHtml);
         var bodyMarkdown = PostProcessMarkdown(rawMarkdown);
@@ -109,16 +120,23 @@ public sealed partial class MarkdownDocumentConverter
           WordCount: wordCount,
           CharCount: fullMarkdown.Length,
           Sha256: sha256,
-          DroppedInternalLinksCount: pre.DroppedInternalLinksCount);
-      });
+          DroppedInternalLinksCount: pre.DroppedInternalLinksCount
+        );
+      }
+    ).ConfigureAwait(false);
 
     // Extract HelpCenterVersion deterministically from Home.htm (or fallback to BuildVersion)
     var helpCenterVersion = "unknown";
-    var homeItem = includedItems.FirstOrDefault(x => x.Route.DocType == "home");
+    var homeItem = includedItems.FirstOrDefault(x => x.Route.DocType is "home");
     if (homeItem.Route is not null)
     {
-      var homePre = await _pipeline.PreprocessDocumentAsync(homeItem.Route, homeItem.Page.Html, corpusIndex, cancellationToken);
-      if (!string.IsNullOrWhiteSpace(homePre.HelpCenterVersion))
+      var homePre = await HtmlPreprocessorPipeline.PreprocessDocumentAsync(
+        homeItem.Route,
+        homeItem.Page.Html,
+        corpusIndex,
+        cancellationToken
+      ).ConfigureAwait(false);
+      if (string.IsNullOrWhiteSpace(homePre.HelpCenterVersion) is false)
       {
         helpCenterVersion = homePre.HelpCenterVersion;
       }
@@ -136,9 +154,9 @@ public sealed partial class MarkdownDocumentConverter
   {
     var cleaned = markdown
       .Replace('\u00A0', ' ')
-      .Replace("\u200B", string.Empty)
-      .Replace("\uFEFF", string.Empty)
-      .Replace("\r\n", "\n")
+      .Replace("\u200B", string.Empty, StringComparison.Ordinal)
+      .Replace("\uFEFF", string.Empty, StringComparison.Ordinal)
+      .Replace("\r\n", "\n", StringComparison.Ordinal)
       .Replace('\r', '\n')
       .Replace(" &gt; ", " > ", StringComparison.Ordinal);
 
@@ -147,7 +165,10 @@ public sealed partial class MarkdownDocumentConverter
     return cleaned.Trim();
   }
 
-  internal static string BuildYamlFrontmatter(DocumentRoute route, PreprocessedHtmlResult pre)
+  internal static string BuildYamlFrontmatter(
+    DocumentRoute route,
+    PreprocessedHtmlResult pre
+  )
   {
     var sb = new StringBuilder();
     sb.Append("---\n");
@@ -156,7 +177,7 @@ public sealed partial class MarkdownDocumentConverter
     sb.Append("section: ").Append(FormatYamlScalar(route.Section)).Append('\n');
     sb.Append("doc_type: ").Append(FormatYamlScalar(route.DocType)).Append('\n');
 
-    if (pre.Audience.Count > 0)
+    if (pre.Audience.Count is > 0)
     {
       sb.Append("audience:\n");
       foreach (var item in pre.Audience)
@@ -165,7 +186,7 @@ public sealed partial class MarkdownDocumentConverter
       }
     }
 
-    if (route.TocInfo.TocPaths.Count > 0)
+    if (route.TocInfo.TocPaths.Count is > 0)
     {
       sb.Append("toc_paths:\n");
       foreach (var path in route.TocInfo.TocPaths)
@@ -176,7 +197,7 @@ public sealed partial class MarkdownDocumentConverter
 
     sb.Append("source_path: ").Append(FormatYamlScalar(route.CanonicalSourcePath)).Append('\n');
 
-    if (!string.IsNullOrWhiteSpace(pre.Summary))
+    if (string.IsNullOrWhiteSpace(pre.Summary) is false)
     {
       sb.Append("summary: ").Append(FormatYamlScalar(pre.Summary)).Append('\n');
     }
@@ -188,7 +209,7 @@ public sealed partial class MarkdownDocumentConverter
   internal static string FormatYamlScalar(string value)
   {
     var trimmed = value.Replace('\n', ' ').Replace('\r', ' ').Trim();
-    if (trimmed.Length == 0)
+    if (trimmed.Length is 0)
     {
       return "\"\"";
     }
@@ -204,7 +225,7 @@ public sealed partial class MarkdownDocumentConverter
       trimmed.Contains(" #", StringComparison.Ordinal) ||
       trimmed.EndsWith(':');
 
-    if (!needsQuoting)
+    if (needsQuoting is false)
     {
       return trimmed;
     }
@@ -225,7 +246,7 @@ public sealed partial class MarkdownDocumentConverter
     var count = 0;
     foreach (var token in WordSplitRegex().Split(text.Trim()))
     {
-      if (!string.IsNullOrEmpty(token))
+      if (string.IsNullOrEmpty(token) is false)
       {
         count++;
       }

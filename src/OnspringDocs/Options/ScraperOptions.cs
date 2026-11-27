@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.Extensions.Configuration;
 
 namespace OnspringDocs.Options;
@@ -5,7 +6,7 @@ namespace OnspringDocs.Options;
 /// <summary>
 /// Immutable configuration options controlling scraping, filtering, and output generation.
 /// </summary>
-public sealed record ScraperOptions
+internal sealed record ScraperOptions
 {
   public required string BaseUrl { get; init; }
   public required string Username { get; init; }
@@ -46,7 +47,10 @@ public sealed record ScraperOptions
       5. <exe-dir>/../appsettings.json
     """;
 
-  public static ScraperOptionsParseResult Parse(string[] args, IConfiguration? configurationOverride = null)
+  public static ScraperOptionsParseResult Parse(
+    string[] args,
+    IConfiguration? configurationOverride = null
+  )
   {
     var outputDirectory = "docs";
     var maxConcurrency = 12;
@@ -77,69 +81,111 @@ public sealed record ScraperOptions
           includeNonTocLinks = false;
           break;
         case "--output":
-          if (!TryReadValue(args, ref i, arg, out var outputVal, out var outErr))
+          if (TryReadValue(args, ref i, arg, out var outputVal, out var outErr) is false)
+          {
             return ScraperOptionsParseResult.Fail(outErr);
+          }
+
           outputDirectory = outputVal;
           break;
         case "--config":
-          if (!TryReadValue(args, ref i, arg, out var cfgVal, out var cfgErr))
+          if (TryReadValue(args, ref i, arg, out var cfgVal, out var cfgErr) is false)
+          {
             return ScraperOptionsParseResult.Fail(cfgErr);
+          }
+
           configPath = cfgVal;
           break;
         case "--concurrency":
-          if (!TryReadValue(args, ref i, arg, out var concVal, out var concErr))
+          if (TryReadValue(args, ref i, arg, out var concVal, out var concErr) is false)
+          {
             return ScraperOptionsParseResult.Fail(concErr);
-          if (!int.TryParse(concVal, out maxConcurrency) || maxConcurrency is < 1 or > 32)
-            return ScraperOptionsParseResult.Fail($"Invalid --concurrency value '{concVal}'. Expected an integer between 1 and 32.");
+          }
+
+          if (int.TryParse(
+                concVal,
+                NumberStyles.Integer,
+                CultureInfo.InvariantCulture,
+                out maxConcurrency
+              ) is false || maxConcurrency is < 1 or > 32)
+          {
+            return ScraperOptionsParseResult.Fail(
+              $"Invalid --concurrency value '{concVal}'. Expected an integer between 1 and 32."
+            );
+          }
+
           break;
         case "--recent-releases":
-          if (!TryReadValue(args, ref i, arg, out var relVal, out var relErr))
+          if (TryReadValue(args, ref i, arg, out var relVal, out var relErr) is false)
+          {
             return ScraperOptionsParseResult.Fail(relErr);
-          if (!int.TryParse(relVal, out var relCount) || relCount < 1)
-            return ScraperOptionsParseResult.Fail($"Invalid --recent-releases value '{relVal}'. Expected a positive integer.");
+          }
+
+          if (int.TryParse(
+                relVal,
+                NumberStyles.Integer,
+                CultureInfo.InvariantCulture,
+                out var relCount
+              ) is false || relCount is < 1)
+          {
+            return ScraperOptionsParseResult.Fail(
+              $"Invalid --recent-releases value '{relVal}'. Expected a positive integer."
+            );
+          }
+
           recentReleasesCount = relCount;
           break;
         case "--save-raw-html":
-          if (!TryReadValue(args, ref i, arg, out var rawVal, out var rawErr))
+          if (TryReadValue(args, ref i, arg, out var rawVal, out var rawErr) is false)
+          {
             return ScraperOptionsParseResult.Fail(rawErr);
+          }
+
           saveRawHtmlDirectory = rawVal;
           break;
         default:
-          return ScraperOptionsParseResult.Fail($"Unknown argument: '{arg}'. Use --help to see supported options.");
+          return ScraperOptionsParseResult.Fail(
+            $"Unknown argument: '{arg}'. Use --help to see supported options."
+          );
       }
     }
 
     if (showHelp)
     {
-      return ScraperOptionsParseResult.Help(new ScraperOptions
-      {
-        BaseUrl = string.Empty,
-        Username = string.Empty,
-        Password = string.Empty,
-        OutputDirectory = outputDirectory,
-        MaxConcurrency = maxConcurrency,
-        ExcludeReleaseNotes = excludeReleaseNotes,
-        RecentReleasesCount = recentReleasesCount,
-        ExcludeVideos = excludeVideos,
-        IncludeNonTocLinks = includeNonTocLinks,
-        SaveRawHtmlDirectory = saveRawHtmlDirectory,
-        ConfigPath = configPath,
-        ShowHelp = true,
-      });
+      return ScraperOptionsParseResult.Help(
+        new ScraperOptions
+        {
+          BaseUrl = string.Empty,
+          Username = string.Empty,
+          Password = string.Empty,
+          OutputDirectory = outputDirectory,
+          MaxConcurrency = maxConcurrency,
+          ExcludeReleaseNotes = excludeReleaseNotes,
+          RecentReleasesCount = recentReleasesCount,
+          ExcludeVideos = excludeVideos,
+          IncludeNonTocLinks = includeNonTocLinks,
+          SaveRawHtmlDirectory = saveRawHtmlDirectory,
+          ConfigPath = configPath,
+          ShowHelp = true,
+        }
+      );
     }
 
     if (excludeReleaseNotes && recentReleasesCount is not null)
     {
-      return ScraperOptionsParseResult.Fail("Cannot combine --exclude-release-notes with --recent-releases.");
+      return ScraperOptionsParseResult.Fail(
+        "Cannot combine --exclude-release-notes with --recent-releases."
+      );
     }
 
     if (configPath is not null)
     {
       var resolvedConfig = Path.GetFullPath(configPath);
-      if (!File.Exists(resolvedConfig))
+      if (File.Exists(resolvedConfig) is false)
       {
         return ScraperOptionsParseResult.Fail($"Config file not found: '{resolvedConfig}'.");
       }
+
       configPath = resolvedConfig;
     }
 
@@ -148,17 +194,22 @@ public sealed record ScraperOptions
     var username = configuration["Onspring:Username"]?.Trim() ?? string.Empty;
     var password = configuration["Onspring:Password"] ?? string.Empty;
 
-    if (string.IsNullOrWhiteSpace(baseUrl) || string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(password))
+    if (string.IsNullOrWhiteSpace(baseUrl) ||
+        string.IsNullOrWhiteSpace(username) ||
+        string.IsNullOrWhiteSpace(password))
     {
       return ScraperOptionsParseResult.Fail(
         "Missing required configuration values (Onspring:BaseUrl, Onspring:Username, Onspring:Password). " +
-        "Provide them in appsettings.json, via --config <path>, or via ONSPRING__BASEURL, ONSPRING__USERNAME, ONSPRING__PASSWORD.");
+        "Provide them in appsettings.json, via --config <path>, or via ONSPRING__BASEURL, ONSPRING__USERNAME, ONSPRING__PASSWORD."
+      );
     }
 
-    if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var parsedUri) ||
-        (parsedUri.Scheme != Uri.UriSchemeHttp && parsedUri.Scheme != Uri.UriSchemeHttps))
+    if (Uri.TryCreate(baseUrl, UriKind.Absolute, out var parsedUri) is false ||
+        parsedUri.Scheme is not ("http" or "https"))
     {
-      return ScraperOptionsParseResult.Fail($"Invalid Onspring:BaseUrl '{baseUrl}'. Expected an absolute http/https URL.");
+      return ScraperOptionsParseResult.Fail(
+        $"Invalid Onspring:BaseUrl '{baseUrl}'. Expected an absolute http/https URL."
+      );
     }
 
     baseUrl = baseUrl.TrimEnd('/');
@@ -168,20 +219,22 @@ public sealed record ScraperOptions
       return ScraperOptionsParseResult.Fail("--output directory cannot be empty.");
     }
 
-    return ScraperOptionsParseResult.Success(new ScraperOptions
-    {
-      BaseUrl = baseUrl,
-      Username = username,
-      Password = password,
-      OutputDirectory = outputDirectory,
-      MaxConcurrency = maxConcurrency,
-      ExcludeReleaseNotes = excludeReleaseNotes,
-      RecentReleasesCount = recentReleasesCount,
-      ExcludeVideos = excludeVideos,
-      IncludeNonTocLinks = includeNonTocLinks,
-      SaveRawHtmlDirectory = string.IsNullOrWhiteSpace(saveRawHtmlDirectory) ? null : saveRawHtmlDirectory,
-      ConfigPath = configPath,
-    });
+    return ScraperOptionsParseResult.Success(
+      new ScraperOptions
+      {
+        BaseUrl = baseUrl,
+        Username = username,
+        Password = password,
+        OutputDirectory = outputDirectory,
+        MaxConcurrency = maxConcurrency,
+        ExcludeReleaseNotes = excludeReleaseNotes,
+        RecentReleasesCount = recentReleasesCount,
+        ExcludeVideos = excludeVideos,
+        IncludeNonTocLinks = includeNonTocLinks,
+        SaveRawHtmlDirectory = string.IsNullOrWhiteSpace(saveRawHtmlDirectory) ? null : saveRawHtmlDirectory,
+        ConfigPath = configPath,
+      }
+    );
   }
 
   internal static IConfiguration BuildDefaultConfiguration(string? explicitConfigPath = null)
@@ -199,9 +252,12 @@ public sealed record ScraperOptions
     }
 
     // Lowest -> highest precedence
-    var baseDir = AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+    var baseDir = AppContext.BaseDirectory.TrimEnd(
+      Path.DirectorySeparatorChar,
+      Path.AltDirectorySeparatorChar
+    );
     var parentDir = Path.GetDirectoryName(baseDir);
-    if (!string.IsNullOrEmpty(parentDir))
+    if (string.IsNullOrEmpty(parentDir) is false)
     {
       AddOptionalJsonIfExists(Path.Combine(parentDir, "appsettings.json"));
     }
@@ -209,7 +265,7 @@ public sealed record ScraperOptions
     AddOptionalJsonIfExists(Path.Combine(baseDir, "appsettings.json"));
     AddOptionalJsonIfExists(Path.Combine(Directory.GetCurrentDirectory(), "appsettings.json"));
 
-    if (!string.IsNullOrWhiteSpace(explicitConfigPath))
+    if (string.IsNullOrWhiteSpace(explicitConfigPath) is false)
     {
       AddOptionalJsonIfExists(explicitConfigPath);
     }
@@ -218,7 +274,13 @@ public sealed record ScraperOptions
     return builder.Build();
   }
 
-  private static bool TryReadValue(string[] args, ref int index, string flag, out string value, out string error)
+  private static bool TryReadValue(
+    string[] args,
+    ref int index,
+    string flag,
+    out string value,
+    out string error
+  )
   {
     if (index + 1 >= args.Length)
     {
@@ -233,7 +295,7 @@ public sealed record ScraperOptions
   }
 }
 
-public sealed record ScraperOptionsParseResult
+internal sealed record ScraperOptionsParseResult
 {
   public bool IsSuccess { get; init; }
   public bool IsHelpRequested { get; init; }

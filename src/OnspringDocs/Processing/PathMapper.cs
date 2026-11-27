@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Text.RegularExpressions;
 using OnspringDocs.Options;
 using OnspringDocs.Scraping;
@@ -8,7 +9,7 @@ namespace OnspringDocs.Processing;
 /// Maps canonical Help Center source URLs to normalized kebab-case Markdown routes, sections,
 /// document types, and release versions, and applies deterministic CLI filtering.
 /// </summary>
-public static partial class PathMapper
+internal static partial class PathMapper
 {
   [GeneratedRegex(@"([a-z0-9])([A-Z])")]
   private static partial Regex LowerToUpperBoundaryRegex();
@@ -22,11 +23,15 @@ public static partial class PathMapper
   [GeneratedRegex(@"-{2,}")]
   private static partial Regex MultiHyphenRegex();
 
-  private static readonly Dictionary<string, string> KnownAcronymCompounds = new(StringComparer.OrdinalIgnoreCase)
+  private static readonly Dictionary<string, string> KnownAcronymCompounds = new(
+    StringComparer.OrdinalIgnoreCase
+  )
   {
     ["RESTAPI"] = "rest-api",
     ["RestApi"] = "rest-api",
   };
+
+  private static readonly char[] SpaceAndUnderscore = [' ', '_'];
 
   public static IReadOnlyList<DocumentRoute> MapRoutes(IEnumerable<TocEntry> entries)
   {
@@ -44,27 +49,30 @@ public static partial class PathMapper
       var segments = relativeSource
         .Split('/', StringSplitOptions.RemoveEmptyEntries)
         .Select(ToKebabCase)
-        .Where(s => !string.IsNullOrEmpty(s))
+        .Where(s => string.IsNullOrEmpty(s) is false)
         .ToArray();
 
-      var baseId = segments.Length > 0 ? string.Join("/", segments) : "home";
+      var baseId = segments.Length is > 0 ? string.Join('/', segments) : "home";
       var id = baseId;
       var suffix = 2;
-      while (!usedIds.Add(id))
+      while (usedIds.Add(id) is false)
       {
         id = $"{baseId}-{suffix++}";
       }
 
       var (section, docType, releaseVersion) = ClassifyRoute(segments, id);
 
-      routes.Add(new DocumentRoute(
-        Id: id,
-        RelativeMarkdownPath: $"{id}.md",
-        CanonicalSourcePath: entry.CanonicalSourcePath,
-        Section: section,
-        DocType: docType,
-        ReleaseVersion: releaseVersion,
-        TocInfo: entry));
+      routes.Add(
+        new DocumentRoute(
+          Id: id,
+          RelativeMarkdownPath: $"{id}.md",
+          CanonicalSourcePath: entry.CanonicalSourcePath,
+          Section: section,
+          DocType: docType,
+          ReleaseVersion: releaseVersion,
+          TocInfo: entry
+        )
+      );
     }
 
     return routes
@@ -72,22 +80,25 @@ public static partial class PathMapper
       .ToList();
   }
 
-  public static IReadOnlyList<DocumentRoute> FilterRoutes(IReadOnlyList<DocumentRoute> routes, ScraperOptions options)
+  public static IReadOnlyList<DocumentRoute> FilterRoutes(
+    IReadOnlyList<DocumentRoute> routes,
+    ScraperOptions options
+  )
   {
     IEnumerable<DocumentRoute> filtered = routes;
 
     if (options.ExcludeVideos)
     {
-      filtered = filtered.Where(r => r.DocType != "video");
+      filtered = filtered.Where(r => r.DocType is not "video");
     }
 
     if (options.ExcludeReleaseNotes)
     {
-      filtered = filtered.Where(r => r.DocType != "release-notes");
+      filtered = filtered.Where(r => r.DocType is not "release-notes");
     }
     else if (options.RecentReleasesCount is int keepCount)
     {
-      var releaseNotes = filtered.Where(r => r.DocType == "release-notes").ToList();
+      var releaseNotes = filtered.Where(r => r.DocType is "release-notes").ToList();
       var keepReleaseIds = new HashSet<string>(StringComparer.Ordinal);
 
       foreach (var overview in releaseNotes.Where(r => r.ReleaseVersion is null))
@@ -104,7 +115,9 @@ public static partial class PathMapper
         keepReleaseIds.Add(versioned.Id);
       }
 
-      filtered = filtered.Where(r => r.DocType != "release-notes" || keepReleaseIds.Contains(r.Id));
+      filtered = filtered.Where(
+        r => r.DocType is not "release-notes" || keepReleaseIds.Contains(r.Id)
+      );
     }
 
     return filtered
@@ -112,6 +125,11 @@ public static partial class PathMapper
       .ToList();
   }
 
+  [SuppressMessage(
+    "Globalization",
+    "CA1308:Normalize strings to uppercase",
+    Justification = "Kebab-case URL paths and route IDs are lowercase."
+  )]
   internal static string ToKebabCase(string segment)
   {
     var decoded = Uri.UnescapeDataString(segment).Trim();
@@ -121,7 +139,7 @@ public static partial class PathMapper
     }
 
     // Split on spaces/underscores first so compound tokens like RESTAPI can be normalized per token.
-    var rawParts = decoded.Split([' ', '_'], StringSplitOptions.RemoveEmptyEntries);
+    var rawParts = decoded.Split(SpaceAndUnderscore, StringSplitOptions.RemoveEmptyEntries);
     var normalizedParts = new List<string>(rawParts.Length);
 
     foreach (var part in rawParts)
@@ -129,7 +147,11 @@ public static partial class PathMapper
       var token = part;
       foreach (var kv in KnownAcronymCompounds)
       {
-        token = token.Replace(kv.Key, $"-{kv.Value}-", StringComparison.OrdinalIgnoreCase);
+        token = token.Replace(
+          kv.Key,
+          $"-{kv.Value}-",
+          StringComparison.OrdinalIgnoreCase
+        );
       }
 
       token = AcronymToWordBoundaryRegex().Replace(token, "$1-$2");
@@ -137,15 +159,17 @@ public static partial class PathMapper
       token = token.ToLowerInvariant();
 
       // Replace invalid filename chars while preserving version dots (e.g. 5.0, 37.2)
-      var chars = token.Select(c => char.IsLetterOrDigit(c) || c is '-' or '.' ? c : '-').ToArray();
+      var chars = token
+        .Select(c => char.IsLetterOrDigit(c) || c is '-' or '.' ? c : '-')
+        .ToArray();
       var cleaned = MultiHyphenRegex().Replace(new string(chars), "-").Trim('-', '.');
-      if (!string.IsNullOrEmpty(cleaned))
+      if (string.IsNullOrEmpty(cleaned) is false)
       {
         normalizedParts.Add(cleaned);
       }
     }
 
-    var combined = string.Join("-", normalizedParts);
+    var combined = string.Join('-', normalizedParts);
     return MultiHyphenRegex().Replace(combined, "-").Trim('-');
   }
 
@@ -173,9 +197,12 @@ public static partial class PathMapper
     return path;
   }
 
-  private static (string Section, string DocType, Version? ReleaseVersion) ClassifyRoute(string[] segments, string id)
+  private static (string Section, string DocType, Version? ReleaseVersion) ClassifyRoute(
+    string[] segments,
+    string id
+  )
   {
-    if (segments.Length == 0 || id == "home")
+    if (segments.Length is 0 || id is "home")
     {
       return ("Home", "home", null);
     }
@@ -199,12 +226,12 @@ public static partial class PathMapper
       "release-notes" => "release-notes",
       "videos" => "video",
       "faqs" => "faq",
-      _ when id == "getting-started/glossary" => "glossary",
+      _ when id is "getting-started/glossary" => "glossary",
       _ => "guide",
     };
 
     Version? releaseVersion = null;
-    if (docType == "release-notes" && segments.Length >= 2)
+    if (docType is "release-notes" && segments.Length is >= 2)
     {
       var fileName = segments[^1];
       var match = ReleaseVersionPrefixRegex().Match(fileName);
@@ -218,6 +245,10 @@ public static partial class PathMapper
   }
 
   private static string ToTitleLabel(string kebab) =>
-    string.Join(" ", kebab.Split('-', StringSplitOptions.RemoveEmptyEntries)
-      .Select(w => char.ToUpperInvariant(w[0]) + w[1..]));
+    string.Join(
+      ' ',
+      kebab
+        .Split('-', StringSplitOptions.RemoveEmptyEntries)
+        .Select(w => char.ToUpperInvariant(w[0]) + w[1..])
+    );
 }

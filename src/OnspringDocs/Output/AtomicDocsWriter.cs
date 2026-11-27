@@ -6,13 +6,14 @@ namespace OnspringDocs.Output;
 /// Writes the generated documentation tree into a staging directory using UTF-8 (no BOM) and LF line endings,
 /// then atomically swaps it into the final output path so stale files never linger and failures never corrupt existing docs.
 /// </summary>
-public static class AtomicDocsWriter
+internal static class AtomicDocsWriter
 {
   private static readonly UTF8Encoding Utf8NoBom = new(encoderShouldEmitUTF8Identifier: false);
 
   public static void WriteAllAtomically(
     string outputDirectory,
-    IReadOnlyDictionary<string, string> filesByRelativePosixPath)
+    IReadOnlyDictionary<string, string> filesByRelativePosixPath
+  )
   {
     var targetPath = Path.GetFullPath(outputDirectory);
     var parentDir = Path.GetDirectoryName(targetPath)
@@ -35,12 +36,14 @@ public static class AtomicDocsWriter
         var relativeOsPath = kv.Key.Replace('/', Path.DirectorySeparatorChar);
         var fullFilePath = Path.Combine(stagingPath, relativeOsPath);
         var fileDir = Path.GetDirectoryName(fullFilePath);
-        if (!string.IsNullOrEmpty(fileDir))
+        if (string.IsNullOrEmpty(fileDir) is false)
         {
           Directory.CreateDirectory(fileDir);
         }
 
-        var normalizedContent = kv.Value.Replace("\r\n", "\n").Replace('\r', '\n');
+        var normalizedContent = kv.Value
+          .Replace("\r\n", "\n", StringComparison.Ordinal)
+          .Replace('\r', '\n');
         File.WriteAllText(fullFilePath, normalizedContent, Utf8NoBom);
       }
 
@@ -56,10 +59,13 @@ public static class AtomicDocsWriter
       }
       catch
       {
-        if (targetExisted && Directory.Exists(backupPath) && !Directory.Exists(targetPath))
+        if (targetExisted &&
+            Directory.Exists(backupPath) &&
+            Directory.Exists(targetPath) is false)
         {
           Directory.Move(backupPath, targetPath);
         }
+
         throw;
       }
 

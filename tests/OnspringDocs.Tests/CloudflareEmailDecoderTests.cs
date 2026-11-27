@@ -26,8 +26,11 @@ public sealed class CloudflareEmailDecoderTests
       </div>
       """;
 
-    var context = BrowsingContext.New(Configuration.Default);
-    var doc = await context.OpenAsync(req => req.Content(html), TestContext.Current.CancellationToken);
+    using var context = BrowsingContext.New(Configuration.Default);
+    using var doc = await context.OpenAsync(
+      req => req.Content(html),
+      TestContext.Current.CancellationToken
+    );
     var main = doc.QuerySelector("#mc-main-content")!;
 
     CloudflareEmailDecoder.DecodeEmailsInElement(main);
