@@ -1,5 +1,4 @@
 name: CI
-
 on:
   pull_request:
     branches:
@@ -8,14 +7,11 @@ on:
     branches:
       - main
   workflow_dispatch:
-
 permissions:
   contents: read
-
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
-
 jobs:
   build-and-test:
     name: Build, Test & Native AOT Smoke Check
@@ -23,24 +19,18 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
-
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
-
       - name: Restore dependencies
         run: dotnet restore
-
       - name: Verify formatting
         run: dotnet format OnspringDocs.slnx --verify-no-changes --no-restore
-
       - name: Build solution
         run: dotnet build OnspringDocs.slnx -c Release --no-restore
-
       - name: Run tests
         run: dotnet test -c Release --no-build --no-restore
-
       - name: Collect code coverage
         run: |
           dotnet test -c Debug --no-restore \
@@ -48,7 +38,6 @@ jobs:
             --coverage-output-format cobertura \
             --coverage-settings coverage-settings.xml \
             --results-directory TestResults
-
       - name: Upload coverage report
         if: always()
         uses: actions/upload-artifact@v7
@@ -56,10 +45,8 @@ jobs:
           name: coverage-report
           path: TestResults/
           retention-days: 14
-
       - name: Install Native AOT prerequisites
         run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
-
       - name: Publish Native AOT binary
         run: |
           dotnet publish src/OnspringDocs/OnspringDocs.csproj -c Release -r linux-x64 --no-restore -o ./dist

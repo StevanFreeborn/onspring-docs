@@ -1,5 +1,4 @@
 name: Release
-
 on:
   push:
     tags:
@@ -10,14 +9,11 @@ on:
         description: 'Release tag (e.g., v0.1.0). Defaults to latest git tag when omitted.'
         required: false
         type: string
-
 permissions:
   contents: write
-
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
-
 jobs:
   verify:
     name: Format, Build & Test
@@ -30,7 +26,6 @@ jobs:
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
-
       - name: Resolve release tag
         id: meta
         shell: bash
@@ -53,6 +48,7 @@ jobs:
           fi
 
           NUMERIC_VERSION="${TAG#v}"
+
           if [[ ! "${NUMERIC_VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
             echo "Error: Tag '${TAG}' must be vX.Y.Z or vX.Y.Z.W." >&2
             exit 1
@@ -62,24 +58,18 @@ jobs:
             echo "tag=${TAG}"
             echo "numeric_version=${NUMERIC_VERSION}"
           } >> "$GITHUB_OUTPUT"
-
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
-
       - name: Restore dependencies
         run: dotnet restore
-
       - name: Verify formatting
         run: dotnet format OnspringDocs.slnx --verify-no-changes --no-restore
-
       - name: Build solution
         run: dotnet build OnspringDocs.slnx -c Release --no-restore
-
       - name: Run tests
         run: dotnet test -c Release --no-build --no-restore
-
   build:
     name: Publish (${{ matrix.rid }})
     needs: verify
@@ -112,20 +102,16 @@ jobs:
             rid: win-arm64
             archive_ext: zip
             install_aot_deps: false
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
-
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
-
       - name: Install Native AOT prerequisites (Linux)
         if: matrix.install_aot_deps
         run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
-
       - name: Publish Native AOT binary
         run: |
           dotnet publish src/OnspringDocs/OnspringDocs.csproj \
@@ -133,7 +119,6 @@ jobs:
             -r ${{ matrix.rid }} \
             -p:Version=${{ needs.verify.outputs.numeric_version }} \
             -o publish
-
       - name: Package archive (Unix)
         if: matrix.archive_ext == 'tar.gz'
         shell: bash
@@ -155,7 +140,6 @@ jobs:
 
           mkdir -p dist
           mv "${ARCHIVE_NAME}.tar.gz" "${ARCHIVE_NAME}.tar.gz.sha256" dist/
-
       - name: Package archive (Windows)
         if: matrix.archive_ext == 'zip'
         shell: pwsh
@@ -173,13 +157,11 @@ jobs:
 
           New-Item -ItemType Directory -Force -Path dist | Out-Null
           Move-Item "$ArchiveName.zip", "$ArchiveName.zip.sha256" -Destination dist/
-
       - name: Upload build artifacts
         uses: actions/upload-artifact@v7
         with:
           name: assets-${{ matrix.rid }}
           path: dist/*
-
   publish-release:
     name: Publish GitHub Release
     needs: [verify, build]
@@ -191,11 +173,9 @@ jobs:
           path: all-assets
           pattern: assets-*
           merge-multiple: true
-
       - name: Generate SHA256SUMS.txt
         working-directory: all-assets
         run: cat *.sha256 > SHA256SUMS.txt
-
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
