@@ -4,6 +4,32 @@
 
 It signs in over HTTP, reads MadCap Flare's TOC metadata directly, fetches topics in parallel, and converts them to GitHub-Flavored Markdown. It builds as a single Native AOT executable with no browser or runtime dependencies.
 
+## Installation
+
+### Linux and macOS
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/StevanFreeborn/onspring-docs/main/scripts/install.sh | bash
+```
+
+Install a specific version or choose a directory:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/StevanFreeborn/onspring-docs/main/scripts/install.sh | bash -s -- --version v0.1.0 --to ~/.local/bin
+```
+
+### Windows
+
+```powershell
+irm https://raw.githubusercontent.com/StevanFreeborn/onspring-docs/main/scripts/install.ps1 | iex
+```
+
+Install a specific version or choose a directory:
+
+```powershell
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/StevanFreeborn/onspring-docs/main/scripts/install.ps1))) -Version v0.1.0 -InstallDir "$HOME\onspring-docs\bin"
+```
+
 ## Output
 
 Each run replaces the output directory atomically, removing deleted topics. Every file uses UTF-8 without a BOM, LF line endings, and no local timestamps, so repeated runs against the same Help Center build match byte for byte.
@@ -16,7 +42,7 @@ Each run replaces the output directory atomically, removing deleted topics. Ever
 
 ## Configuration
 
-Copy [`OnspringDocs/appsettings.example.json`](OnspringDocs/appsettings.example.json) to `appsettings.json` and set your instance URL and credentials:
+Copy [`src/OnspringDocs/appsettings.example.json`](src/OnspringDocs/appsettings.example.json) to `appsettings.json` and set your instance URL and credentials:
 
 ```json
 {
@@ -61,5 +87,5 @@ Building requires the .NET 11 SDK. Publishing a Native AOT executable on Windows
 ```powershell
 dotnet build --configuration Release
 dotnet test --configuration Release
-dotnet publish OnspringDocs/OnspringDocs.csproj -c Release -r win-x64 -o "$env:USERPROFILE\onspring-docs\bin"
+dotnet publish src/OnspringDocs/OnspringDocs.csproj -c Release -r win-x64 -o "$env:USERPROFILE\onspring-docs\bin"
 ```

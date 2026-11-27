@@ -1,0 +1,209 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g., v0.1.0). Defaults to latest git tag when omitted.'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Format, Build & Test
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+      numeric_version: ${{ steps.meta.outputs.numeric_version }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Resolve release tag
+        id: meta
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            TAG="${{ github.ref_name }}"
+          elif [ -n "${{ inputs.tag }}" ]; then
+            TAG="${{ inputs.tag }}"
+          else
+            TAG="$(git describe --tags --abbrev=0)"
+          fi
+
+          if [ -z "${TAG}" ]; then
+            echo "Error: Could not resolve release tag." >&2
+            exit 1
+          fi
+
+          if [[ "${TAG}" != v* ]]; then
+            TAG="v${TAG}"
+          fi
+
+          NUMERIC_VERSION="${TAG#v}"
+          if [[ ! "${NUMERIC_VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
+            echo "Error: Tag '${TAG}' must be vX.Y.Z or vX.Y.Z.W." >&2
+            exit 1
+          fi
+
+          {
+            echo "tag=${TAG}"
+            echo "numeric_version=${NUMERIC_VERSION}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Verify formatting
+        run: dotnet format OnspringDocs.slnx --verify-no-changes --no-restore
+
+      - name: Build solution
+        run: dotnet build OnspringDocs.slnx -c Release --no-restore
+
+      - name: Run tests
+        run: dotnet test -c Release --no-build --no-restore
+
+  build:
+    name: Publish (${{ matrix.rid }})
+    needs: verify
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            rid: linux-x64
+            archive_ext: tar.gz
+            install_aot_deps: true
+          - os: ubuntu-24.04-arm
+            rid: linux-arm64
+            archive_ext: tar.gz
+            install_aot_deps: true
+          - os: macos-latest
+            rid: osx-x64
+            archive_ext: tar.gz
+            install_aot_deps: false
+          - os: macos-latest
+            rid: osx-arm64
+            archive_ext: tar.gz
+            install_aot_deps: false
+          - os: windows-latest
+            rid: win-x64
+            archive_ext: zip
+            install_aot_deps: false
+          - os: windows-11-arm
+            rid: win-arm64
+            archive_ext: zip
+            install_aot_deps: false
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - name: Install Native AOT prerequisites (Linux)
+        if: matrix.install_aot_deps
+        run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
+
+      - name: Publish Native AOT binary
+        run: |
+          dotnet publish src/OnspringDocs/OnspringDocs.csproj \
+            -c Release \
+            -r ${{ matrix.rid }} \
+            -p:Version=${{ needs.verify.outputs.numeric_version }} \
+            -o publish
+
+      - name: Package archive (Unix)
+        if: matrix.archive_ext == 'tar.gz'
+        shell: bash
+        run: |
+          ARCHIVE_NAME="onspring-docs-${{ needs.verify.outputs.tag }}-${{ matrix.rid }}"
+          STAGE_DIR="staging/${ARCHIVE_NAME}"
+          mkdir -p "${STAGE_DIR}"
+
+          cp publish/onspring-docs "${STAGE_DIR}/"
+          chmod +x "${STAGE_DIR}/onspring-docs"
+          cp README.md src/OnspringDocs/appsettings.example.json "${STAGE_DIR}/"
+
+          tar -czf "${ARCHIVE_NAME}.tar.gz" -C staging "${ARCHIVE_NAME}"
+          if command -v sha256sum >/dev/null 2>&1; then
+            sha256sum "${ARCHIVE_NAME}.tar.gz" > "${ARCHIVE_NAME}.tar.gz.sha256"
+          else
+            shasum -a 256 "${ARCHIVE_NAME}.tar.gz" > "${ARCHIVE_NAME}.tar.gz.sha256"
+          fi
+
+          mkdir -p dist
+          mv "${ARCHIVE_NAME}.tar.gz" "${ARCHIVE_NAME}.tar.gz.sha256" dist/
+
+      - name: Package archive (Windows)
+        if: matrix.archive_ext == 'zip'
+        shell: pwsh
+        run: |
+          $ArchiveName = "onspring-docs-${{ needs.verify.outputs.tag }}-${{ matrix.rid }}"
+          $StageDir = "staging/$ArchiveName"
+          New-Item -ItemType Directory -Force -Path $StageDir | Out-Null
+
+          Copy-Item "publish/onspring-docs.exe" -Destination $StageDir
+          Copy-Item "README.md", "src/OnspringDocs/appsettings.example.json" -Destination $StageDir
+
+          Compress-Archive -Path $StageDir -DestinationPath "$ArchiveName.zip"
+          $Hash = (Get-FileHash -Path "$ArchiveName.zip" -Algorithm SHA256).Hash.ToLower()
+          "$Hash  $ArchiveName.zip" | Out-File -Encoding ascii "$ArchiveName.zip.sha256"
+
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Move-Item "$ArchiveName.zip", "$ArchiveName.zip.sha256" -Destination dist/
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: assets-${{ matrix.rid }}
+          path: dist/*
+
+  publish-release:
+    name: Publish GitHub Release
+    needs: [verify, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: all-assets
+          pattern: assets-*
+          merge-multiple: true
+
+      - name: Generate SHA256SUMS.txt
+        working-directory: all-assets
+        run: cat *.sha256 > SHA256SUMS.txt
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.verify.outputs.tag }}
+          name: Release ${{ needs.verify.outputs.tag }}
+          generate_release_notes: true
+          files: |
+            all-assets/*.tar.gz
+            all-assets/*.zip
+            all-assets/*.sha256
+            all-assets/SHA256SUMS.txt
