@@ -113,12 +113,7 @@ jobs:
         if: matrix.install_aot_deps
         run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
       - name: Publish Native AOT binary
-        run: |
-          dotnet publish src/OnspringDocs/OnspringDocs.csproj \
-            -c Release \
-            -r ${{ matrix.rid }} \
-            -p:Version=${{ needs.verify.outputs.numeric_version }} \
-            -o publish
+        run: dotnet publish src/OnspringDocs/OnspringDocs.csproj -c Release -r ${{ matrix.rid }} -p:Version=${{ needs.verify.outputs.numeric_version }} -o publish
       - name: Package archive (Unix)
         if: matrix.archive_ext == 'tar.gz'
         shell: bash
